@@ -2,19 +2,31 @@
 # Claude Code WorktreeCreate hook (replaces the built-in `git worktree add`).
 #
 # - Bases new worktrees on the integration branch (develop by default) instead
-#   of the default branch, when the requested base is the default branch.
-#   Any other base ref (e.g. a subagent isolating off a feature branch) is honored.
+#   of the default branch, when the repo's current HEAD is the default
+#   branch. Any other HEAD (you're on a feature branch, or Claude is already
+#   inside a linked worktree when it asks for another one) is kept as-is, so
+#   isolating further off in-progress work stays on it.
 # - Names the branch from the worktree name: `fix-foo-33` -> `fix/foo-33`
 #   for conventional-commit prefixes, otherwise `worktree-<name>`.
+# - Places worktrees at <main worktree>/.claude/worktrees/<name> (override the
+#   parent with CLAUDE_WORKTREE_ROOT), matching Claude Code's own default.
 # - Copies untracked local files (.worktreeinclude, or .env/.env.local) and
 #   installs dependencies when a lockfile is present.
 #
-# Contract: JSON on stdin ({cwd, base_ref, worktree_dir, ...}); the worktree
-# path is the ONLY thing printed on stdout; any non-zero exit aborts creation.
+# Contract: JSON on stdin ({cwd, name, ...}). Claude Code's hook reference
+# documents additional `worktree_path`/`base_ref` fields, but as of 2026-10
+# they are not actually sent (see https://code.claude.com/docs/en/hooks and
+# the filed doc bug at https://claudeissues.com/issue/77566) -- this hook
+# relies only on `name` and `cwd` and decides the path and base ref itself.
+# The worktree path is the ONLY thing printed on stdout; any non-zero exit
+# aborts creation.
 #
 # Env:
-#   CLAUDE_WORKTREE_BASE          integration branch to prefer (default: develop;
-#                                 an origin/ prefix is accepted)
+#   CLAUDE_WORKTREE_BASE          integration branch to prefer (default: develop).
+#                                 Accepts a bare name, an origin/ prefix, or
+#                                 <remote>/<branch> for another configured remote.
+#   CLAUDE_WORKTREE_ROOT          worktree parent dir, relative to the main
+#                                 worktree's root (default: .claude/worktrees)
 #   CLAUDE_WORKTREE_SKIP_INSTALL  set to 1 to skip dependency installation
 set -euo pipefail
 
@@ -32,11 +44,11 @@ read_input() {
   local input
   input=$(cat)
   jq -e 'type == "object"' >/dev/null 2>&1 <<<"$input" || die "stdin is not a JSON object"
-  WORKTREE_DIR=$(jq -r '.worktree_dir // empty' <<<"$input")
-  BASE_REF=$(jq -r '.base_ref // empty' <<<"$input")
+  NAME=$(jq -r '.name // empty' <<<"$input")
   SOURCE_DIR=$(jq -r '.cwd // empty' <<<"$input")
-  [[ -n "$WORKTREE_DIR" ]] || die "worktree_dir missing from input"
-  [[ "$WORKTREE_DIR" == /* ]] || die "worktree_dir must be absolute: $WORKTREE_DIR"
+  [[ -n "$NAME" ]] || die "name missing from input"
+  [[ "$NAME" != *"/"* ]] || die "invalid worktree name (contains '/'): $NAME"
+  [[ "$NAME" != *..* ]] || die "invalid worktree name (contains '..'): $NAME"
   SOURCE_DIR=${SOURCE_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}
 }
 
@@ -65,6 +77,23 @@ existing_ref() { # branch
   fi
 }
 
+# Resolves CLAUDE_WORKTREE_BASE to an existing ref, or empty. Accepts a bare
+# branch name (checked on origin, then locally) or <remote>/<branch> for a
+# configured remote other than origin.
+preferred_ref() {
+  local pref="$CLAUDE_WORKTREE_BASE" remote
+  if [[ "$pref" == */* ]]; then
+    remote="${pref%%/*}"
+    if [[ "$remote" != origin ]] && git remote get-url "$remote" >/dev/null 2>&1 \
+      && git show-ref --verify --quiet "refs/remotes/$pref"; then
+      echo "$pref"
+      return
+    fi
+    pref="${pref#origin/}"
+  fi
+  existing_ref "$pref"
+}
+
 # Detached HEAD sitting exactly on the default branch tip counts as the default branch.
 is_default_tip() { # sha
   local tip
@@ -72,13 +101,13 @@ is_default_tip() { # sha
   [[ -n "$tip" && "$tip" == "$1" ]]
 }
 
+# The base ref for a new worktree is the repo's current HEAD, redirected to
+# the integration branch only when that HEAD is the default branch.
 resolve_base() {
-  local base="$BASE_REF" redirect=0
-  if [[ -z "$base" || "$base" == HEAD ]]; then
-    if ! base=$(git symbolic-ref --quiet --short HEAD 2>/dev/null); then
-      base=$(git rev-parse HEAD)
-      is_default_tip "$base" && redirect=1
-    fi
+  local base redirect=0
+  if ! base=$(git symbolic-ref --quiet --short HEAD 2>/dev/null); then
+    base=$(git rev-parse HEAD)
+    is_default_tip "$base" && redirect=1
   fi
   is_default_branch "$base" && redirect=1
   if [[ "$redirect" -eq 0 ]]; then
@@ -86,12 +115,12 @@ resolve_base() {
     return
   fi
   local preferred fallback
-  preferred=$(existing_ref "${CLAUDE_WORKTREE_BASE#origin/}")
+  preferred=$(preferred_ref)
   if [[ -n "$preferred" ]]; then
     echo "$preferred"
     return
   fi
-  # No integration branch: keep the requested base (a local main may hold unpushed work).
+  # No integration branch: keep the current base (a local main may hold unpushed work).
   if git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
     echo "$base"
     return
@@ -106,6 +135,15 @@ branch_name() { # worktree name
   else
     echo "worktree-$1"
   fi
+}
+
+# The repository's first (main) worktree, canonicalized. New worktrees nest
+# under this, never under whichever linked worktree we were invoked from, so
+# isolating further from inside a worktree doesn't nest worktrees-in-worktrees.
+main_worktree_root() {
+  local path
+  path=$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')
+  (cd -P "$path" && pwd)
 }
 
 add_worktree() { # branch base
@@ -180,10 +218,10 @@ install_deps() {
   (cd "$WORKTREE_DIR" && "${cmd[@]}") >&2 || log "warning: dependency install failed; continuing"
 }
 
-# Fetch origin, plus the remote named in base_ref (e.g. upstream/release).
+# Fetch origin, plus the remote named in CLAUDE_WORKTREE_BASE (e.g. upstream/release).
 fetch_remotes() {
-  local remotes=(origin) remote="${BASE_REF%%/*}"
-  if [[ "$BASE_REF" == */* && "$remote" != origin ]] && git remote get-url "$remote" >/dev/null 2>&1; then
+  local remotes=(origin) remote="${CLAUDE_WORKTREE_BASE%%/*}"
+  if [[ "$CLAUDE_WORKTREE_BASE" == */* && "$remote" != origin ]] && git remote get-url "$remote" >/dev/null 2>&1; then
     remotes+=("$remote")
   fi
   for remote in "${remotes[@]}"; do
@@ -209,6 +247,14 @@ main() {
 
   read_input
 
+  local root
+  root=$(git -C "$SOURCE_DIR" rev-parse --show-toplevel 2>/dev/null) || die "not a git repository: $SOURCE_DIR"
+  cd "$root"
+
+  local main_root
+  main_root=$(main_worktree_root)
+  WORKTREE_DIR="$main_root/${CLAUDE_WORKTREE_ROOT:-.claude/worktrees}/$NAME"
+
   # Already a worktree (e.g. resumed session): nothing to do.
   # Compare physical paths: --show-toplevel resolves symlinks (e.g. macOS /var -> /private/var).
   if [[ -d "$WORKTREE_DIR" ]] \
@@ -218,21 +264,17 @@ main() {
     return 0
   fi
 
-  local root
-  root=$(git -C "$SOURCE_DIR" rev-parse --show-toplevel 2>/dev/null) || die "not a git repository: $SOURCE_DIR"
-  cd "$root"
-
   fetch_remotes
 
   DEFAULT_BRANCH=$(default_branch)
   local base branch
   base=$(resolve_base)
-  branch=$(branch_name "$(basename "$WORKTREE_DIR")")
+  branch=$(branch_name "$NAME")
   git check-ref-format --branch "$branch" >/dev/null 2>&1 || die "invalid branch name: $branch"
 
-  log "base_ref requested: ${BASE_REF:-<none>}, using: $base"
+  log "basing worktree on: $base"
   add_worktree "$branch" "$base"
-  copy_includes "$root"
+  copy_includes "$main_root"
   install_deps
 
   echo "$WORKTREE_DIR"

@@ -2,6 +2,10 @@
 # Tests for create-worktree.sh. Builds throwaway git repos (with a bare
 # "origin") under a temp dir and feeds the hook WorktreeCreate JSON on stdin.
 #
+# The hook derives its base ref from whatever the repo currently has checked
+# out (there is no base_ref input -- see the contract note in the script), so
+# tests that want a particular base check out that ref in the repo first.
+#
 # Usage: ./test-create-worktree.sh
 set -uo pipefail
 
@@ -42,15 +46,14 @@ make_repo() {
   echo "$clone"
 }
 
-# run_hook <repo> <worktree-name> <base_ref> [extra env...] -> stdout in $OUT, exit code in $RC
+# run_hook <cwd> <worktree-name> [extra env...] -> stdout in $OUT, exit code in $RC
 run_hook() {
-  local repo="$1" name="$2" base="$3"; shift 3
-  local dir="$repo/.claude/worktrees/$name"
+  local cwd="$1" name="$2"; shift 2
   local input
-  input=$(jq -n --arg cwd "$repo" --arg dir "$dir" --arg base "$base" \
+  input=$(jq -n --arg cwd "$cwd" --arg name "$name" \
     '{session_id:"t", transcript_path:"/dev/null", cwd:$cwd,
-      hook_event_name:"WorktreeCreate", base_ref:$base, worktree_dir:$dir}')
-  OUT=$(cd "$repo" && env CLAUDE_PROJECT_DIR="$repo" CLAUDE_WORKTREE_SKIP_INSTALL=1 "$@" \
+      hook_event_name:"WorktreeCreate", name:$name}')
+  OUT=$(cd "$cwd" && env CLAUDE_WORKTREE_SKIP_INSTALL=1 "$@" \
     bash "$HOOK" <<<"$input" 2>"$TMP_ROOT/stderr")
   RC=$?
 }
@@ -60,187 +63,196 @@ sha_of() { git -C "$1" rev-parse "$2"; }
 
 echo "create-worktree.sh tests"
 
-# 1. Default branch base is redirected to develop when develop exists
+# 1. Current HEAD on the default branch is redirected to develop
 repo=$(make_repo r1 yes)
-run_hook "$repo" fix-health-leak-33 main
+run_hook "$repo" fix-health-leak-33
 dir="$repo/.claude/worktrees/fix-health-leak-33"
 assert_eq "exits 0" 0 "$RC"
 assert_eq "prints only the worktree path on stdout" "$dir" "$OUT"
 assert_eq "bases on origin/develop" "$(sha_of "$repo" origin/develop)" "$(sha_of "$dir" HEAD)"
 assert_eq "maps conventional prefix to branch name" "fix/health-leak-33" "$(branch_of "$dir")"
-
-# 2. origin/main and HEAD-on-main are also treated as the default branch
-run_hook "$repo" feat-a origin/main
-assert_eq "origin/main redirected to develop" "$(sha_of "$repo" origin/develop)" \
+run_hook "$repo" feat-a
+assert_eq "a second name also redirects to develop" "$(sha_of "$repo" origin/develop)" \
   "$(sha_of "$repo/.claude/worktrees/feat-a" HEAD)"
-run_hook "$repo" feat-b HEAD
-assert_eq "HEAD on main redirected to develop" "$(sha_of "$repo" origin/develop)" \
-  "$(sha_of "$repo/.claude/worktrees/feat-b" HEAD)"
 
-# 3. Non-default base refs are honored (e.g. subagent isolation on a feature branch)
+# 2. A feature branch already checked out is honored (subagent isolating further)
 git -C "$repo" switch -q -c feat/topic origin/develop
 git -C "$repo" commit -q --allow-empty -m "topic commit"
-run_hook "$repo" agent-x feat/topic
-assert_eq "honors a feature-branch base" "$(sha_of "$repo" feat/topic)" \
+run_hook "$repo" agent-x
+assert_eq "honors the checked-out feature branch" "$(sha_of "$repo" feat/topic)" \
   "$(sha_of "$repo/.claude/worktrees/agent-x" HEAD)"
-run_hook "$repo" agent-y HEAD
-assert_eq "HEAD on a feature branch stays on that branch" "$(sha_of "$repo" feat/topic)" \
-  "$(sha_of "$repo/.claude/worktrees/agent-y" HEAD)"
-assert_eq "unprefixed name gets worktree- branch" "worktree-agent-y" \
-  "$(branch_of "$repo/.claude/worktrees/agent-y")"
+assert_eq "unprefixed name gets worktree- branch" "worktree-agent-x" \
+  "$(branch_of "$repo/.claude/worktrees/agent-x")"
 git -C "$repo" switch -q main
 
-# 4. Repo without develop falls back to the default branch
+# 3. Repo without develop falls back to the default branch
 repo2=$(make_repo r2 no)
-run_hook "$repo2" feat-thing main
+run_hook "$repo2" feat-thing
 assert_eq "no develop: exits 0" 0 "$RC"
 assert_eq "no develop: bases on origin/main" "$(sha_of "$repo2" origin/main)" \
   "$(sha_of "$repo2/.claude/worktrees/feat-thing" HEAD)"
 
-# 5. Re-running for an existing worktree is idempotent
-run_hook "$repo" fix-health-leak-33 main
+# 4. Re-running for an existing worktree is idempotent
+run_hook "$repo" fix-health-leak-33
 assert_eq "existing worktree: exits 0" 0 "$RC"
 assert_eq "existing worktree: prints path" "$repo/.claude/worktrees/fix-health-leak-33" "$OUT"
 
-# 6. Existing branch (worktree removed earlier) is reused, not recreated
+# 5. Existing branch (worktree removed earlier) is reused, not recreated
 git -C "$repo" worktree remove "$repo/.claude/worktrees/feat-a"
-run_hook "$repo" feat-a main
+run_hook "$repo" feat-a
 assert_eq "reuses existing branch: exits 0" 0 "$RC"
 assert_eq "reuses existing branch: on feat/a" "feat/a" "$(branch_of "$repo/.claude/worktrees/feat-a")"
 
-# 7. Gitignored env files are copied; missing ones are skipped
+# 6. Gitignored env files are copied; missing ones are skipped
 printf '.env\n.env.local\n' >"$repo/.gitignore"
 echo "SECRET=1" >"$repo/.env.local"
-run_hook "$repo" chore-env main
+run_hook "$repo" chore-env
 if [[ -f "$repo/.claude/worktrees/chore-env/.env.local" ]]; then pass "copies .env.local"; else fail "copies .env.local"; fi
 if [[ ! -e "$repo/.claude/worktrees/chore-env/.env" ]]; then pass "skips missing .env"; else fail "skips missing .env"; fi
 
-# 8. .worktreeinclude overrides the default copy list
+# 7. .worktreeinclude overrides the default copy list
 echo "local.config" >"$repo/.worktreeinclude"
 echo "x" >"$repo/local.config"
-run_hook "$repo" chore-include main
+run_hook "$repo" chore-include
 if [[ -f "$repo/.claude/worktrees/chore-include/local.config" ]]; then pass "honors .worktreeinclude"; else fail "honors .worktreeinclude"; fi
 if [[ ! -e "$repo/.claude/worktrees/chore-include/.env.local" ]]; then pass ".worktreeinclude replaces defaults"; else fail ".worktreeinclude replaces defaults"; fi
 rm "$repo/.worktreeinclude"
 
-# 9. CLAUDE_WORKTREE_BASE overrides the preferred integration branch
+# 8. CLAUDE_WORKTREE_BASE overrides the preferred integration branch
 git -C "$repo" switch -q -c staging main
 git -C "$repo" commit -q --allow-empty -m "staging commit"
 git -C "$repo" push -q origin staging
 git -C "$repo" switch -q main
-run_hook "$repo" feat-staged main CLAUDE_WORKTREE_BASE=staging
+run_hook "$repo" feat-staged CLAUDE_WORKTREE_BASE=staging
 assert_eq "CLAUDE_WORKTREE_BASE respected" "$(sha_of "$repo" origin/staging)" \
   "$(sha_of "$repo/.claude/worktrees/feat-staged" HEAD)"
 
-# 10. Works offline (fetch failure is a warning, not an error)
+# 9. Works offline (fetch failure is a warning, not an error)
 git -C "$repo" remote set-url origin "$TMP_ROOT/does-not-exist.git"
-run_hook "$repo" fix-offline main
+run_hook "$repo" fix-offline
 assert_eq "offline: exits 0" 0 "$RC"
 assert_eq "offline: still bases on cached origin/develop" "$(sha_of "$repo" origin/develop)" \
   "$(sha_of "$repo/.claude/worktrees/fix-offline" HEAD)"
 
-# 11. Not a git repo -> non-zero exit, nothing on stdout
+# 10. Not a git repo -> non-zero exit, nothing on stdout
 plain="$TMP_ROOT/plain"; mkdir -p "$plain"
-run_hook "$plain" feat-z main
+run_hook "$plain" feat-z
 if [[ "$RC" -ne 0 ]]; then pass "non-git dir fails"; else fail "non-git dir fails" "exit $RC"; fi
 assert_eq "non-git dir prints nothing on stdout" "" "$OUT"
 
-# 12. Malformed input -> non-zero exit
+# 11. Malformed or incomplete input -> non-zero exit
 OUT=$(echo "not json" | bash "$HOOK" 2>/dev/null); RC=$?
 if [[ "$RC" -ne 0 ]]; then pass "malformed JSON fails"; else fail "malformed JSON fails"; fi
-OUT=$(echo '{"worktree_dir":""}' | bash "$HOOK" 2>/dev/null); RC=$?
-if [[ "$RC" -ne 0 ]]; then pass "missing worktree_dir fails"; else fail "missing worktree_dir fails"; fi
+OUT=$(echo '{"name":""}' | bash "$HOOK" 2>/dev/null); RC=$?
+if [[ "$RC" -ne 0 ]]; then pass "missing name fails"; else fail "missing name fails"; fi
+OUT=$(echo '{"name":"a/b"}' | bash "$HOOK" 2>/dev/null); RC=$?
+if [[ "$RC" -ne 0 ]]; then pass "name with a slash fails"; else fail "name with a slash fails"; fi
 
-# 13. Branch names that git rejects fail cleanly
+# 12. Branch names that git rejects fail cleanly
 repo3=$(make_repo r3 yes)
-run_hook "$repo3" "feat-..bad" main
+run_hook "$repo3" "feat-..bad"
 if [[ "$RC" -ne 0 ]]; then pass "invalid branch name fails"; else fail "invalid branch name fails"; fi
 
-# 14. Orphaned worktree (dir deleted without `git worktree remove`) is pruned and recreated
+# 13. Orphaned worktree (dir deleted without `git worktree remove`) is pruned and recreated
 repo4=$(make_repo r4 yes)
-run_hook "$repo4" fix-orphan main
+run_hook "$repo4" fix-orphan
 rm -rf "$repo4/.claude/worktrees/fix-orphan"
-run_hook "$repo4" fix-orphan main
+run_hook "$repo4" fix-orphan
 assert_eq "orphaned worktree: exits 0" 0 "$RC"
 assert_eq "orphaned worktree: recreated on fix/orphan" "fix/orphan" \
   "$(branch_of "$repo4/.claude/worktrees/fix-orphan" 2>/dev/null)"
 
-# 15. Include globs skip directories (no recursive node_modules copies)
+# 14. Include globs skip directories (no recursive node_modules copies)
 mkdir -p "$repo4/node_modules/pkg"; echo x >"$repo4/node_modules/pkg/index.js"
 printf 'node_modules/*\n' >"$repo4/.worktreeinclude"
-run_hook "$repo4" chore-nodirs main
+run_hook "$repo4" chore-nodirs
 if [[ ! -e "$repo4/.claude/worktrees/chore-nodirs/node_modules/pkg" ]]; then pass "include skips directories"; else fail "include skips directories"; fi
 
-# 16. Include lines are trimmed, not stripped of inner whitespace
+# 15. Include lines are trimmed, not stripped of inner whitespace
 mkdir -p "$repo4/my config"; echo x >"$repo4/my config/a.json"
 printf '  my config/a.json  # local\n' >"$repo4/.worktreeinclude"
-run_hook "$repo4" chore-spaces main
+run_hook "$repo4" chore-spaces
 if [[ -f "$repo4/.claude/worktrees/chore-spaces/my config/a.json" ]]; then pass "include keeps inner spaces"; else fail "include keeps inner spaces"; fi
 rm "$repo4/.worktreeinclude"
 
-# 17. Copy failures are warnings, not fatal
+# 16. Copy failures are warnings, not fatal
 echo "x" >"$repo4/.env.local"; chmod 000 "$repo4/.env.local"
-run_hook "$repo4" chore-unreadable main
+run_hook "$repo4" chore-unreadable
 chmod 600 "$repo4/.env.local"
 if [[ "$(id -u)" -eq 0 ]]; then pass "copy failure non-fatal (skipped as root)"; else
   assert_eq "copy failure non-fatal" 0 "$RC"; fi
 
-# 18. Detached HEAD at the default branch tip is redirected to develop
+# 17. Detached HEAD at the default branch tip is redirected to develop
 git -C "$repo4" switch -q --detach origin/main
-run_hook "$repo4" feat-detached HEAD
+run_hook "$repo4" feat-detached
 assert_eq "detached HEAD at main redirected to develop" "$(sha_of "$repo4" origin/develop)" \
   "$(sha_of "$repo4/.claude/worktrees/feat-detached" HEAD)"
 git -C "$repo4" switch -q main
 
-# 19. A base on a non-origin remote is fetched before use
+# 18. CLAUDE_WORKTREE_BASE on a non-origin remote is fetched and used
 upstream="$TMP_ROOT/upstream.git"
 git clone -q --bare "$TMP_ROOT/r4-origin.git" "$upstream"
 (cd "$repo4" && git push -q "$upstream" origin/develop:refs/heads/release)
 git -C "$repo4" remote add upstream "$upstream"
-run_hook "$repo4" feat-rel upstream/release
+run_hook "$repo4" feat-rel CLAUDE_WORKTREE_BASE=upstream/release
 assert_eq "non-origin remote base: exits 0" 0 "$RC"
 assert_eq "non-origin remote base: on upstream/release" "$(git --git-dir="$upstream" rev-parse release)" \
   "$(sha_of "$repo4/.claude/worktrees/feat-rel" HEAD)"
 
-# 20. CLAUDE_WORKTREE_BASE accepts an origin/ prefix
+# 19. CLAUDE_WORKTREE_BASE accepts an origin/ prefix
 git -C "$repo4" switch -q -c staging main
 git -C "$repo4" commit -q --allow-empty -m "staging commit"
 git -C "$repo4" push -q origin staging
 git -C "$repo4" switch -q main
-run_hook "$repo4" feat-prefixed main CLAUDE_WORKTREE_BASE=origin/staging
+run_hook "$repo4" feat-prefixed CLAUDE_WORKTREE_BASE=origin/staging
 assert_eq "origin/-prefixed CLAUDE_WORKTREE_BASE respected" "$(sha_of "$repo4" origin/staging)" \
   "$(sha_of "$repo4/.claude/worktrees/feat-prefixed" HEAD)"
 
-# 21. Idempotency check works when worktree_dir goes through a symlink
+# 20. cwd reached through a symlink still resolves under the real repo path
 ln -s "$repo4" "$TMP_ROOT/r4-link"
-run_hook "$TMP_ROOT/r4-link" fix-linked main
-run_hook "$TMP_ROOT/r4-link" fix-linked main
-assert_eq "symlinked path: re-run exits 0" 0 "$RC"
-assert_eq "symlinked path: re-run prints path" "$TMP_ROOT/r4-link/.claude/worktrees/fix-linked" "$OUT"
+run_hook "$TMP_ROOT/r4-link" fix-linked
+first_out="$OUT"
+assert_eq "symlinked cwd: resolves under the real repo path" "$repo4/.claude/worktrees/fix-linked" "$first_out"
+run_hook "$TMP_ROOT/r4-link" fix-linked
+assert_eq "symlinked cwd: re-run exits 0" 0 "$RC"
+assert_eq "symlinked cwd: re-run prints the same path" "$first_out" "$OUT"
 
-# 22. No develop: unpushed commits on local main are kept
+# 21. No develop: unpushed commits on local main are kept
 repo5=$(make_repo r5 no)
 git -C "$repo5" commit -q --allow-empty -m "unpushed"
-run_hook "$repo5" feat-local main
+run_hook "$repo5" feat-local
 assert_eq "no develop: bases on local main, not origin/main" "$(sha_of "$repo5" main)" \
   "$(sha_of "$repo5/.claude/worktrees/feat-local" HEAD)"
 
-# 23. Reusing a branch checked out elsewhere fails with a clear message
+# 22. Reusing a branch checked out elsewhere fails with a clear message
 git -C "$repo5" switch -q -c fix/busy
-run_hook "$repo5" fix-busy main
+run_hook "$repo5" fix-busy
 if [[ "$RC" -ne 0 ]]; then pass "branch checked out elsewhere fails"; else fail "branch checked out elsewhere fails"; fi
 if grep -q "already checked out at $repo5" "$TMP_ROOT/stderr"; then pass "names the checkout holding the branch"
 else fail "names the checkout holding the branch" "$(cat "$TMP_ROOT/stderr")"; fi
 assert_eq "branch checked out elsewhere prints nothing on stdout" "" "$OUT"
 git -C "$repo5" switch -q main
 
-# 24. Default branch is develop: an explicit "main" base is honored, not redirected
+# 23. Default branch is develop: a locally checked-out "main" is honored, not redirected
 repo6=$(make_repo r6 yes)
 git -C "$repo6" remote set-head origin develop >/dev/null 2>&1
-run_hook "$repo6" fix-hotfix main
-assert_eq "explicit main base with develop default: exits 0" 0 "$RC"
-assert_eq "explicit main base with develop default: bases on main, not develop" \
+run_hook "$repo6" fix-hotfix
+assert_eq "develop as default, on local main: exits 0" 0 "$RC"
+assert_eq "develop as default, on local main: bases on main, not develop" \
   "$(sha_of "$repo6" origin/main)" "$(sha_of "$repo6/.claude/worktrees/fix-hotfix" HEAD)"
+
+# 24. A worktree asking for a further worktree nests under the main root, not itself
+repo7=$(make_repo r7 yes)
+run_hook "$repo7" outer
+git -C "$repo7/.claude/worktrees/outer" switch -q -c feat/nested
+git -C "$repo7/.claude/worktrees/outer" commit -q --allow-empty -m "nested commit"
+run_hook "$repo7/.claude/worktrees/outer" inner
+assert_eq "nested request: exits 0" 0 "$RC"
+assert_eq "nested request: placed under the main root, not the outer worktree" \
+  "$repo7/.claude/worktrees/inner" "$OUT"
+assert_eq "nested request: bases on the outer worktree's feature branch" \
+  "$(sha_of "$repo7/.claude/worktrees/outer" feat/nested)" \
+  "$(sha_of "$repo7/.claude/worktrees/inner" HEAD)"
 
 echo
 echo "passed: $PASS  failed: $FAIL"
