@@ -12,6 +12,7 @@ prompts/
   analysis/   architecture, research, decision-making
 skills/       Claude Code skill definitions (portable SKILL.md format)
 agents/       subagent definitions (frontmatter + system prompt)
+hooks/        Claude Code hook scripts, one folder per hook (script + README + tests)
 templates/    reusable document skeletons (ADRs, runbooks, PR bodies)
 ```
 
