@@ -234,6 +234,14 @@ else fail "names the checkout holding the branch" "$(cat "$TMP_ROOT/stderr")"; f
 assert_eq "branch checked out elsewhere prints nothing on stdout" "" "$OUT"
 git -C "$repo5" switch -q main
 
+# 24. Default branch is develop: an explicit "main" base is honored, not redirected
+repo6=$(make_repo r6 yes)
+git -C "$repo6" remote set-head origin develop >/dev/null 2>&1
+run_hook "$repo6" fix-hotfix main
+assert_eq "explicit main base with develop default: exits 0" 0 "$RC"
+assert_eq "explicit main base with develop default: bases on main, not develop" \
+  "$(sha_of "$repo6" origin/main)" "$(sha_of "$repo6/.claude/worktrees/fix-hotfix" HEAD)"
+
 echo
 echo "passed: $PASS  failed: $FAIL"
 [[ "$FAIL" -eq 0 ]]

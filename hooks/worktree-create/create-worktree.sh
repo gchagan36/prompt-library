@@ -53,7 +53,7 @@ default_branch() {
 
 is_default_branch() { # name
   local name="${1#origin/}"
-  [[ "$name" == "$DEFAULT_BRANCH" || "$name" == main || "$name" == master ]]
+  [[ "$name" == "$DEFAULT_BRANCH" ]]
 }
 
 # Prefer origin/<branch>, then local <branch>; empty if neither exists.
