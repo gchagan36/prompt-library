@@ -10,7 +10,7 @@ Without this hook, `claude --worktree <name>` creates `.claude/worktrees/<name>`
 
 | Behavior | Without the hook | With the hook |
 |---|---|---|
-| Base when the request is the default branch | `main` | `origin/develop`, or `origin/$CLAUDE_WORKTREE_BASE`. Falls back to the default branch when no develop branch exists |
+| Base when the request is the default branch | `main` | `origin/develop`, or `origin/$CLAUDE_WORKTREE_BASE`. Falls back to the requested base (unchanged) when no develop branch exists |
 | Base when the request is any other ref (e.g. a subagent isolating off a feature branch) | that ref | that ref (unchanged) |
 | Branch name | `worktree-<name>` | `fix-foo-33` → `fix/foo-33` for conventional-commit prefixes, otherwise `worktree-<name>` |
 | Untracked local files | not copied | globs in `.worktreeinclude`, or `.env` and `.env.local` by default. Tracked files are skipped |

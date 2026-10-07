@@ -91,6 +91,11 @@ resolve_base() {
     echo "$preferred"
     return
   fi
+  # No integration branch: keep the requested base (a local main may hold unpushed work).
+  if git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+    echo "$base"
+    return
+  fi
   fallback=$(existing_ref "$DEFAULT_BRANCH")
   echo "${fallback:-$base}"
 }
@@ -106,6 +111,10 @@ branch_name() { # worktree name
 add_worktree() { # branch base
   git worktree prune >&2  # drop registrations whose directories were deleted by hand
   if git show-ref --verify --quiet "refs/heads/$1"; then
+    local holder
+    holder=$(git worktree list --porcelain \
+      | awk -v ref="branch refs/heads/$1" '/^worktree /{wt=substr($0, 10)} $0 == ref {print wt; exit}')
+    [[ -z "$holder" ]] || die "branch $1 is already checked out at $holder; switch that checkout off it or pick another worktree name"
     log "reusing existing branch $1"
     git worktree add "$WORKTREE_DIR" "$1" >&2
   else
@@ -201,8 +210,9 @@ main() {
   read_input
 
   # Already a worktree (e.g. resumed session): nothing to do.
+  # Compare physical paths: --show-toplevel resolves symlinks (e.g. macOS /var -> /private/var).
   if [[ -d "$WORKTREE_DIR" ]] \
-    && [[ "$(git -C "$WORKTREE_DIR" rev-parse --show-toplevel 2>/dev/null)" == "$WORKTREE_DIR" ]]; then
+    && [[ "$(git -C "$WORKTREE_DIR" rev-parse --show-toplevel 2>/dev/null)" == "$(cd -P "$WORKTREE_DIR" && pwd)" ]]; then
     log "worktree already exists: $WORKTREE_DIR"
     echo "$WORKTREE_DIR"
     return 0

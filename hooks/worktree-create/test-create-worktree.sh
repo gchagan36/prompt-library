@@ -211,6 +211,29 @@ run_hook "$repo4" feat-prefixed main CLAUDE_WORKTREE_BASE=origin/staging
 assert_eq "origin/-prefixed CLAUDE_WORKTREE_BASE respected" "$(sha_of "$repo4" origin/staging)" \
   "$(sha_of "$repo4/.claude/worktrees/feat-prefixed" HEAD)"
 
+# 21. Idempotency check works when worktree_dir goes through a symlink
+ln -s "$repo4" "$TMP_ROOT/r4-link"
+run_hook "$TMP_ROOT/r4-link" fix-linked main
+run_hook "$TMP_ROOT/r4-link" fix-linked main
+assert_eq "symlinked path: re-run exits 0" 0 "$RC"
+assert_eq "symlinked path: re-run prints path" "$TMP_ROOT/r4-link/.claude/worktrees/fix-linked" "$OUT"
+
+# 22. No develop: unpushed commits on local main are kept
+repo5=$(make_repo r5 no)
+git -C "$repo5" commit -q --allow-empty -m "unpushed"
+run_hook "$repo5" feat-local main
+assert_eq "no develop: bases on local main, not origin/main" "$(sha_of "$repo5" main)" \
+  "$(sha_of "$repo5/.claude/worktrees/feat-local" HEAD)"
+
+# 23. Reusing a branch checked out elsewhere fails with a clear message
+git -C "$repo5" switch -q -c fix/busy
+run_hook "$repo5" fix-busy main
+if [[ "$RC" -ne 0 ]]; then pass "branch checked out elsewhere fails"; else fail "branch checked out elsewhere fails"; fi
+if grep -q "already checked out at $repo5" "$TMP_ROOT/stderr"; then pass "names the checkout holding the branch"
+else fail "names the checkout holding the branch" "$(cat "$TMP_ROOT/stderr")"; fi
+assert_eq "branch checked out elsewhere prints nothing on stdout" "" "$OUT"
+git -C "$repo5" switch -q main
+
 echo
 echo "passed: $PASS  failed: $FAIL"
 [[ "$FAIL" -eq 0 ]]
