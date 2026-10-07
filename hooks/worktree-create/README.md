@@ -18,7 +18,17 @@ Without this hook, `claude --worktree <name>` creates `.claude/worktrees/<name>`
 
 The hook fires for `claude --worktree`, for subagents with `isolation: "worktree"`, and for background sessions.
 
-## Install (global)
+## Install
+
+```bash
+../../install.sh --hooks worktree-create              # global
+../../install.sh --hooks worktree-create --project-dir ~/dev/app   # one project
+```
+
+That links the script into `~/.claude/hooks/` and registers it in `settings.json`. See [INSTALL.md](../../INSTALL.md).
+
+<details>
+<summary>Manual install</summary>
 
 ```bash
 mkdir -p ~/.claude/hooks
@@ -38,6 +48,8 @@ Then merge this into `~/.claude/settings.json`. The event takes no matcher.
 ```
 
 To install it for a single project only, put the same block in `<repo>/.claude/settings.json`.
+
+</details>
 
 ## Usage
 

@@ -12,9 +12,24 @@ prompts/
   analysis/   architecture, research, decision-making
 skills/       Claude Code skill definitions (portable SKILL.md format)
 agents/       subagent definitions (frontmatter + system prompt)
+hooks/        Claude Code hooks (one folder per hook, with a hook.json manifest)
+scripts/lib/  helpers sourced by install.sh
 hooks/        Claude Code hook scripts, one folder per hook (script + README + tests)
 templates/    reusable document skeletons (ADRs, runbooks, PR bodies)
 ```
+
+## Install
+
+`./install.sh` links agents, skills and hooks into `~/.claude` (or a single project). Install everything, one category, or named items, and re-running is safe:
+
+```bash
+./install.sh --all                     # everything
+./install.sh --skills --hooks          # categories
+./install.sh --agents planner,debugger # specific items
+./install.sh                           # interactive menu
+```
+
+See [INSTALL.md](INSTALL.md) for every option, project installs, uninstalling, and adding a hook.
 
 ## Conventions
 

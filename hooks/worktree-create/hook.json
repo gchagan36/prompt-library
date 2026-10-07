@@ -1,0 +1,4 @@
+{
+  "event": "WorktreeCreate",
+  "script": "create-worktree.sh"
+}
