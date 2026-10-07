@@ -18,6 +18,6 @@ description: One line saying when to use this skill — this is what triggers it
 ---
 ```
 
-To install a skill, symlink or copy its directory into `~/.claude/skills/` (global) or `<project>/.claude/skills/` (per-project). Keeping the source of truth here means skills survive reinstalls and can be versioned with git.
+To install skills, run `../install.sh --skills` (or name individual skills, e.g. `--skills vault-distill`). It symlinks each directory into `~/.claude/skills/` (global) or `<project>/.claude/skills/` (with `--project-dir`). See [../INSTALL.md](../INSTALL.md). Keeping the source of truth here means skills survive reinstalls and can be versioned with git.
 
 Agent definitions in `../agents/` install the same way into `~/.claude/agents/` or `<project>/.claude/agents/`.
