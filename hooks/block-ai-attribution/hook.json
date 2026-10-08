@@ -1,0 +1,5 @@
+{
+  "event": "PreToolUse",
+  "matcher": "Bash|mcp__github__.*",
+  "script": "block-ai-attribution.sh"
+}
