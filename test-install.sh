@@ -253,6 +253,23 @@ test_malformed_settings_refused() {
   check "hook script not installed" [ ! -e "$(claude)/hooks/create-worktree.sh" ]
 }
 
+test_pretooluse_hook_with_matcher() {
+  echo "PreToolUse hook with matcher"
+  new_env
+  mkdir -p "$(claude)"
+  cat >"$(claude)/settings.json" <<'JSON'
+{"model":"opusplan","hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo hi"}]}]}}
+JSON
+  run --hooks block-ai-attribution
+  check "exits 0" [ "$RC" -eq 0 ]
+  check "script links into the repo" is_link_to "$(claude)/hooks/block-ai-attribution.sh" "$REPO/hooks/block-ai-attribution/block-ai-attribution.sh"
+  check "registered under PreToolUse with its matcher" jq_ok -e \
+    '.hooks.PreToolUse | any(.matcher == "Bash|mcp__github__.*" and (.hooks | any(.command == "$HOME/.claude/hooks/block-ai-attribution.sh")))' "$(claude)/settings.json"
+  check "existing PreToolUse entry survives" jq_ok -e '.hooks.PreToolUse | any(.hooks | any(.command == "echo hi"))' "$(claude)/settings.json"
+  run --hooks block-ai-attribution
+  check "re-run registers it once" jq_ok -e '[.hooks.PreToolUse[].hooks[] | select(.command | endswith("block-ai-attribution.sh"))] | length == 1' "$(claude)/settings.json"
+}
+
 main() {
   echo "install.sh tests"
   test_full_install
@@ -271,6 +288,7 @@ main() {
   test_list
   test_no_selection_without_tty
   test_malformed_settings_refused
+  test_pretooluse_hook_with_matcher
   echo
   echo "$PASSES passed, $FAILURES failed"
   [ "$FAILURES" -eq 0 ]
