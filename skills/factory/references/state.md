@@ -22,6 +22,7 @@ $FACTORY_HOME/
       spec.md                         factory-spec-writer
       build-<P>.md                    the builder of package <P> (e.g. build-P1.md)
       round-<r>/review-<lens>.md      one reviewer per file
+      round-<r>/comments-scan.md      mechanical comment scan for the docs lens (factoryctl comments)
       decision.md                     factory-approver
     worktrees/<id>/                   the job's git worktree (never served by the dashboard)
 ```
@@ -167,6 +168,7 @@ arguments). Output is plain text, one value per line, unless noted.
 | `roster '<job>' '<repo-path>'` | Discovers agents (see **Roster** below) and writes `roster.json` into the job folder for the spec writer. | `hash` of roster.json |
 | `plan '<job>'` | Parses the spec's plan block (see **Plan block**), validates it, checks every `agent` is a builder in `roster.json` and every lens a reviewer in it, then sets `packages` (all `pending`) and `lenses` (unioned with the current lenses once any round exists). Only in stage `spec` or `signoff`. Exit 2 names the first bad field. | `hash` |
 | `ownership '<job>' '<P>' '<from-sha>' '<to-sha>' ['--unowned']` | Runs `git diff --name-only <from>..<to>` in the job's worktree (`--no-renames`) and prints each changed file that package `<P>` neither owns nor lists as a hotspot. With `--unowned`, files no package owns are allowed too (never another package's). Exit 1 if any. Re-parses the plan from `spec.md` and requires a valid sign-off (exit 2 if none, 3 if `spec.md` changed since). | files |
+| `comments '<job>' '<r>'` | Scans the comment and doc lines added in `base..head` (`git diff -U0`) and writes `round-<r>/comments-scan.md`: a table of candidates by rule: `tracker` (issue, PR, and ticket refs, tracker and chat URLs), `process` (AC numbers, review rounds, the spec, "as discussed"), `history` ("previously", "now uses"), `todo` (fewer than 4 words of explanation), `commented-code`. Docs files get `tracker` and `process` only, and changelogs `process` only. Knows `//`, `/* */`, `#`, `--`, `<!-- -->`, and Python docstrings, but misses a block opened in unchanged context. Candidates are evidence, not findings. Needs the round folder (exit 5). | candidate count |
 | `lenses '<job>'` | Computes the lenses the diff `base..head` requires (see **Diff triggers**), adds any missing ones that have a reviewer in `roster.json`, and prints `added <lens>` / `missing <lens>` lines (missing = triggered but no reviewer: a reviewer gap). Never removes a lens. | lines, then `hash` |
 
 ### Roster

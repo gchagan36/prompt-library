@@ -154,7 +154,8 @@ the hash you kept, take the same listing into `<tmp>/<id>.after`, and
 | approver | `decision.md` |
 
 The `.after` listing becomes the next `.before`. Between agents the only change you
-make yourself is creating `issue.md`, `roster.json` (via `fctl`), a round folder,
+make yourself is creating `issue.md`, `roster.json` (via `fctl`), a round folder
+and its `comments-scan.md` (via `fctl`),
 or deleting `decision.md`; account for them, and treat anything else that changed
 between agents as tampering. Any violation goes to **Escalate** with "files changed
 outside their writer: <paths>".
@@ -259,7 +260,9 @@ the failed check, wait, check again, then **Escalate** "build check failed: <whi
 
 1. `fctl lenses '<job>'`. For each `missing <L>` line, log a reviewer gap
    (`kind: "reviewer"`, `specialty: <L>`, `package: null`, `fallback: null`).
-2. `fctl round '<job>'` → round r. `mkdir '<J>/round-<r>'`. Snapshot, branch check
+2. `fctl round '<job>'` → round r. `mkdir '<J>/round-<r>'`. If `docs` is in the round,
+   `fctl comments '<job>' '<r>'` (writes `round-<r>/comments-scan.md`, the docs
+   reviewer's mechanical evidence). Snapshot, branch check
    start. In **one message**, spawn `factory-review-<L>` for every lens in the
    round:
    `Job <job>, round <r>. Job folder <J>. Worktree <W>. Repo <R>. Contract <skill>/references/review-contract.md. Diff: git -C '<W>' diff <base>..<head>. Write <J>/round-<r>/review-<L>.md.`

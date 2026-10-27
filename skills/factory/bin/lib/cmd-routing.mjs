@@ -4,7 +4,8 @@ import path from "node:path";
 import { discoverRoster } from "./agents.mjs";
 import { Fail } from "./errors.mjs";
 import { appendGap, groupGaps, readGaps } from "./gaps.mjs";
-import { diffNames, gitLines } from "./git.mjs";
+import { renderScan, scanDiff } from "./comments.mjs";
+import { diffNames, gitLines, gitRaw } from "./git.mjs";
 import { mutate, mutateIfChanged, openJob, splitAuth } from "./jobs.mjs";
 import { ROSTER, factoryHome, repoFile } from "./paths.mjs";
 import { outOfScope, parsePlan, validatePlan } from "./plan.mjs";
@@ -109,6 +110,24 @@ export function cmdLenses(ctx, args) {
     missing.forEach((l) => ctx.out(`missing ${l}`));
     return added.length > 0 ? { ...state, lenses: [...state.lenses, ...added] } : state;
   });
+}
+
+// Writes round-<r>/comments-scan.md for the docs reviewer; prints the candidate count.
+export function cmdComments(ctx, args) {
+  if (args.length !== 2) throw new Fail(2, "usage: comments <job> <round>");
+  const job = openJob(ctx, args[0]);
+  if (!/^[1-9][0-9]?$/.test(args[1])) throw new Fail(2, "invalid round");
+  const round = Number(args[1]);
+  const state = readState(job.dir);
+  if (round > state.round) throw new Fail(2, `no round ${round}`);
+  const wt = worktreeOf(state);
+  if (!wt || !state.base || !state.head) throw new Fail(2, "comments needs worktree, base and head");
+  const roundDir = path.join(job.dir, `round-${round}`);
+  if (!isDir(roundDir)) throw new Fail(5, `no round-${round} folder`);
+  const diff = gitRaw(wt, ["diff", "-U0", "--no-renames", "--no-color", "--no-ext-diff", `${state.base}..${state.head}`]);
+  const scan = scanDiff(diff);
+  atomicWrite(path.join(roundDir, "comments-scan.md"), renderScan(scan, { round, base: state.base, head: state.head }));
+  ctx.out(String(scan.candidates.length));
 }
 
 export function cmdGap(ctx, args) {

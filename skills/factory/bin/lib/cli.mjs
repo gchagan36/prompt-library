@@ -4,7 +4,9 @@ import { Fail } from "./errors.mjs";
 import {
   cmdClaim, cmdCreate, cmdHash, cmdList, cmdRelease, cmdRepo, cmdRestore, cmdShow, cmdValidate
 } from "./cmd-jobs.mjs";
-import { cmdGap, cmdGaps, cmdLenses, cmdOwnership, cmdPlan, cmdRoster, cmdScan } from "./cmd-routing.mjs";
+import {
+  cmdComments, cmdGap, cmdGaps, cmdLenses, cmdOwnership, cmdPlan, cmdRoster, cmdScan
+} from "./cmd-routing.mjs";
 import {
   cmdChip, cmdFeedback, cmdLens, cmdNote, cmdPkg, cmdRound, cmdSet, cmdSignoff, cmdSignoffCheck
 } from "./cmd-state.mjs";
@@ -34,7 +36,8 @@ const COMMANDS = Object.freeze({
   scan: cmdScan,
   roster: cmdRoster,
   ownership: cmdOwnership,
-  lenses: cmdLenses
+  lenses: cmdLenses,
+  comments: cmdComments
 });
 
 export const USAGE = `usage: factoryctl <command> ...   (see skills/factory/references/state.md)
@@ -43,7 +46,8 @@ export const USAGE = `usage: factoryctl <command> ...   (see skills/factory/refe
   hash <job> | show <job> | validate [<repo>] | list [--repo <repo>]
   set <job> k=v... | note <job> --text|--append <t> | note <job> --line <file> <n>
   roster <job> <repo-path> | plan <job> | pkg <job> <P> <status> | lens <job> <lens>
-  round <job> | chip <job> <lens> <file> | lenses <job> | ownership <job> <P> <from> <to>
+  round <job> | chip <job> <lens> <file> | lenses <job> | ownership <job> <P> <from> <to> [--unowned]
+  comments <job> <round>
   feedback <job> <file> | signoff <job> | signoff-check <job>
   restore <job> <hash> --lease <token> | gap <job> <file> | gaps | scan <file>...
 exit: 0 ok, 1 check failed, 2 invalid, 3 tampered, 4 backup tampered, 5 not found, 6 lease`;

@@ -7,7 +7,8 @@ import { Fail } from "./errors.mjs";
 const NAME_RES = [
   /^(issue|spec|decision)\.md$/,
   /^build-P[1-9]\.md$/,
-  /^round-[1-9][0-9]?\/review-[a-z0-9]+(-[a-z0-9]+){0,2}\.md$/
+  /^round-[1-9][0-9]?\/review-[a-z0-9]+(-[a-z0-9]+){0,2}\.md$/,
+  /^round-[1-9][0-9]?\/comments-scan\.md$/
 ];
 
 export const isAllowedName = (name) => typeof name === "string" && NAME_RES.some((re) => re.test(name));
