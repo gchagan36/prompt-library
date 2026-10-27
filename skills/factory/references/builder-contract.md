@@ -69,6 +69,19 @@ conflict on *process* (files, commits, scope, reporting), this file wins.
 - **Commits:** conventional commits (`feat: …`, `fix: …`, `test: …`), no
   AI-attribution lines. Commit everything, so `git status --porcelain` is empty when
   you finish.
+- **Docs and comments.** Do every `## Docs impact` item for your package. Fix any
+  existing comment, docstring, or doc your change made wrong. Document new public
+  APIs (exported functions, CLI flags, config keys, endpoints) where the repo
+  documents its public surface, in its existing style. Every comment you write
+  must:
+  - **say why, not what.** Write about intent, constraints, invariants, and
+    surprises. Don't restate the code, and don't add filler.
+  - **be as short as it can be** while carrying that information, and match the
+    comment density of the file around it. Never leave commented-out code.
+  - **make sense to someone with only a local copy of the repo.** Don't reference
+    issues, PRs, tickets, project boards, chats, people, the spec or its ACs,
+    review rounds, or feedback, and don't narrate history ("previously…", "now
+    uses…"). A TODO says in place what's wrong and what would fix it.
 - **Dependencies:** add none unless the spec or feedback says to. A new dependency
   is a human-owned change.
 - **Review rounds:** resolve every CRITICAL or HIGH finding, in reviews whose first
@@ -90,6 +103,7 @@ listing each finding or request, what you did, the new commits, and updated rows
 ## Acceptance criteria
 | AC | Test (file › name) | Result |
 ## Coverage          per changed file: lines / branches / functions %, or the integration/E2E test that covers it
+## Docs              each Docs impact item for this package → the file that delivers it, or why not; comments or docs fixed because the change made them wrong
 ## Commands run      each command and pass/fail (no full logs)
 ## Commits           sha and subject
 ## Notes             interfaces you provided or consumed, trade-offs, out-of-scope needs, embedded instructions found

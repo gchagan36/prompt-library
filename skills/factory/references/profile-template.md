@@ -47,6 +47,11 @@ Fixtures: tests/fixtures/; temp dirs per test, never shared state
 Tokens: app/globals.css :root (--bg, --panel, --text, --accent); no hex literals
 Components: components/*.tsx, one per file, siblings are the style reference
 
+## Docs
+Changelog: CHANGELOG.md (Keep a Changelog format)   <- omit if the repo keeps none
+API docs: TSDoc on every export from lib/index.ts
+Comments: sparse; explain why, never what
+
 ## Lenses
 Always: security                             <- lenses to include on every job, beyond the diff triggers
 ```

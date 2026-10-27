@@ -17,8 +17,9 @@ never merges.
 3. **Builders** build the packages in order in a single worktree. Each package goes
    to the best specialist installed, or to the generic builder, and that fallback
    is logged as an **agent gap**.
-4. **Reviewers** run in parallel, only for the lenses the change needs (code always;
-   security, ui, ux, and custom lenses by spec and diff). CRITICAL/HIGH findings
+4. **Reviewers** run in parallel, only for the lenses the change needs: code and
+   docs always (docs covers comment quality, so it applies to every change), and
+   security, ui, ux, and custom lenses by spec and diff. CRITICAL/HIGH findings
    send the work back, at most twice.
 5. **Approver** checks the build against the signed-off spec. If it matches, the
    factory opens a PR to `develop` (or the default branch). Otherwise the job goes
@@ -44,7 +45,7 @@ running it, and a dashboard shows every job across every repo.
 ## Install
 
 ```bash
-./install.sh --skills factory --agents factory-spec-writer,factory-builder,factory-builder-typescript,factory-builder-python,factory-review-code,factory-review-security,factory-review-ui,factory-review-ux,factory-approver
+./install.sh --skills factory --agents factory-spec-writer,factory-builder,factory-builder-typescript,factory-builder-python,factory-review-code,factory-review-security,factory-review-ui,factory-review-ux,factory-review-docs,factory-approver
 ```
 
 The skill and agents need to be installed in the same scope (global or the same
@@ -93,7 +94,7 @@ node --test 'skills/factory/tests/*.test.mjs'   # Node 24 needs the glob, not th
 
 ## Known limits
 
-These are accepted for now, found by the security review on 2026-10-27:
+Accepted limitations:
 
 - **No sandbox.** Every agent runs as you. A prompt-injected builder could edit
   `.git/config` or hooks, or read files in `$HOME`.
@@ -117,17 +118,16 @@ These are accepted for now, found by the security review on 2026-10-27:
   - Races on job files are possible during the narrow window between the
     symlink check and the read.
 
-## Relationship to Scout's factory
+## Design rules
 
-This is a repo-agnostic rewrite of Scout's `.claude/skills/factory`, carrying over its
-hard-won rules: untrusted-input handling, one writer per file, first-line verdicts,
-no prose in shell commands, secret scanning, and never merging. Scout's version
-remains in that repo. What changed:
-
-- Each job has its own state and a lease, replacing one shared board, so several
-  sessions can run at once.
-- State lives under `~/.claude/factory/`, not in the repo.
-- Sign-off on the spec is mandatory.
-- Builders and reviewers are discovered and routed, not fixed, and fallbacks are
-  logged as gaps.
-- Repo knowledge lives in `.claude/factory.md`, not in the agent files.
+- **Agents write only their own file.** Job state changes only through `factoryctl`,
+  and integrity checks catch writes made anywhere else.
+- **Agent output is data.** The orchestrator reads verdict lines and the spec's plan
+  block, and never follows instructions found in files, code, or issues.
+- **Prose never goes on a command line.** It goes into a file passed by path.
+- **Secret scan first.** Everything is scanned before it's pushed or posted.
+- **The factory never merges.** Every approved job ends as an open PR.
+- **One owner per job.** Each job has its own state and a lease, so sessions never
+  share a write target.
+- **Repo knowledge lives in the repo's profile.** It goes in `.claude/factory.md`,
+  not in the agents, so the agents work in any repo.

@@ -41,7 +41,7 @@ stage.
  └──────┬───────┘              │
    ┌────┼────┬────┐            │
    ▼    ▼    ▼    ▼            │ any CHANGES and rework < 2:
- code security ui  ux …        │ resume each package's builder
+ code security ui ux docs …    │ resume each package's builder
    └────┴──┬─┴────┘            │
            ▼   WAIT FOR ALL ───┘
  ┌──────────────┐

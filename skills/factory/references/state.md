@@ -40,14 +40,14 @@ $FACTORY_HOME/
 {
   "schema": 1,
   "id": "004-i57-last-run-timestamp",
-  "repo": "scout-1a2b3c4d",
+  "repo": "webapp-1a2b3c4d",
   "title": "Last Run Timestamp",
   "feature": "#57 show a last-run timestamp in the header",
   "issue": 57,
   "target": "develop",
   "branch": "factory/004-i57-last-run-timestamp",
   "linked": true,
-  "worktree": "/home/me/.claude/factory/repos/scout-1a2b3c4d/worktrees/004-i57-last-run-timestamp",
+  "worktree": "/home/me/.claude/factory/repos/webapp-1a2b3c4d/worktrees/004-i57-last-run-timestamp",
   "base": "8e8521d…40 hex",
   "head": "4b1c0a2…40 hex",
   "stage": "review",
@@ -106,8 +106,8 @@ similar inherited names are rejected.
 - **Owner process.** On `create` and `claim`, the helper walks up its process
   ancestry (`ps -o ppid=,lstart=,comm= -p <pid>` under `LC_ALL=C TZ=UTC`, so `lstart`
   parses as five fields) to the first ancestor whose `comm`
-  is `claude`, and records its `pid` and `lstart` as `pstart`. Verified on WSL
-  2026-10-27: helper → bash → `claude`. If no such ancestor is found, `pid` and
+  is `claude`, and records its `pid` and `lstart` as `pstart`. Run from the Bash
+  tool, the chain is helper → shell → `claude`. If no such ancestor is found, `pid` and
   `pstart` are `null`.
 - **Live** means: `released` is `null`, `host` equals this host, and either the
   process `pid` exists with the same `lstart` (guards PID reuse), or (`pid` is
@@ -232,6 +232,7 @@ top-level files only.
 - **ux**: every ui trigger, plus `README*`, `docs/**`, `*.md` outside tests, OpenAPI
   / JSON Schema files (`*openapi*`, `*.schema.json`), i18n (`locales/**`, `i18n/**`),
   and CLI entry points (`bin/**`, `cli/**`, `**/cli.*`).
+- **docs**: any non-empty diff (code comments count, not just doc files).
 - Custom reviewers: any changed file matching one of their `Triggers:` globs.
 
 **Auth.** Commands that change `state.json` or `lease.json` (`release`, `set`, `note`,

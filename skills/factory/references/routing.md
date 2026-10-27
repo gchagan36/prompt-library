@@ -69,7 +69,7 @@ registries, migration indexes). Packages run in order in one worktree.
 ## Reviewers
 
 **Discovery.** `factory-review-<lens>` agents, from the same two directories. The
-core lenses are `code`, `security`, `ui`, and `ux`. Adding a lens means dropping in
+core lenses are `code`, `security`, `ui`, `ux`, and `docs`. Adding a lens means dropping in
 an agent, e.g. `factory-review-a11y` or `factory-review-perf`, optionally with
 `Triggers: <glob>, <glob>.` in its description.
 
@@ -80,7 +80,9 @@ an agent, e.g. `factory-review-a11y` or `factory-review-perf`, optionally with
 2. **Human sign-off**: can add or drop any lens except `code`, by requesting changes.
 3. **`fctl lenses`**, before every round: adds lenses the actual diff requires.
    Security is on unless every changed file is docs, tests, or styles. UI is on for
-   frontend files. UX is on for UI, docs, API schemas, i18n, and CLI entry points.
+   frontend files. UX is on for UI, docs, API schemas, i18n, and CLI entry points. Docs is on for
+   every non-empty diff, because comment quality applies to all code; the reviewer
+   exits early when nothing it covers changed.
    Custom lenses follow their `Triggers:` globs. The exact rules are in `state.md`
    under "Diff triggers". A lens can be triggered without a reviewer installed
    (e.g. a `perf` lens wanted but no agent for it): the round runs without it and a

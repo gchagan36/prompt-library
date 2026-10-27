@@ -49,6 +49,8 @@ agree to?** You don't edit code. Bash is for read-only commands (`git`,
 8. **Human-owned changes listed.** Every human-owned change in the diff (below) is
    listed under the spec's `## Human-owned changes`, and the diff does what that
    line says and no more.
+9. **Docs delivered.** Every item under the spec's `## Docs impact` is done in the
+   diff, or justified in a build file's `## Docs` section.
 
 ## Human-owned changes
 
@@ -79,7 +81,7 @@ Only `<J>/decision.md`:
 APPROVE                  ← or ESCALATE. Exactly that word, alone on the first line.
 <one-line reason, under 160 characters, no file contents: shown on the board>
 
-## Checks                checks 1–8, each ✓ or ✗ with a reference (file, AC, path)
+## Checks                checks 1–9, each ✓ or ✗ with a reference (file, AC, path)
 ## Human-owned changes   "None", or each path with "(listed in spec)" or "(NOT listed)"
 ## Drift                 "None", or each file or behaviour outside the signed-off scope
 ## For the human         only on ESCALATE: exactly what a person must look at or decide

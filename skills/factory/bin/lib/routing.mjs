@@ -24,7 +24,10 @@ export function triggeredLenses(files, reviewers) {
   const builtIn = [
     ["security", needsSecurity(files)],
     ["ui", files.some(isUi)],
-    ["ux", files.some(isUx)]
+    ["ux", files.some(isUx)],
+    // Comment and doc quality applies to every change; the reviewer exits early when
+    // the diff touches neither.
+    ["docs", files.length > 0]
   ];
   const custom = reviewers
     .filter((r) => r.triggers.length > 0)

@@ -246,12 +246,13 @@ test("diff triggers: docs/tests/styles skip security; ui and ux by path; custom 
   assert.equal(needsSecurity(["README.md", "lib/a.ts"]), true);
   assert.equal(needsSecurity([]), false);
   const custom = [{ lens: "a11y", triggers: ["*.tsx"] }, { lens: "perf", triggers: [] }];
-  assert.deepEqual(triggeredLenses(["docs/guide.md"], custom), ["ux"]);
-  assert.deepEqual(triggeredLenses(["src/components/Button.ts"], custom), ["security", "ui", "ux"]);
-  assert.deepEqual(triggeredLenses(["web/x.tsx"], custom), ["security", "ui", "ux", "a11y"]);
-  assert.deepEqual(triggeredLenses(["api/openapi.yaml", "bin/run"], []), ["security", "ux"]);
-  assert.deepEqual(triggeredLenses(["tests/notes.md"], []), []);
-  assert.deepEqual(triggeredLenses(["lib/x.ts"], []), ["security"]);
+  assert.deepEqual(triggeredLenses(["docs/guide.md"], custom), ["ux", "docs"]);
+  assert.deepEqual(triggeredLenses(["src/components/Button.ts"], custom), ["security", "ui", "ux", "docs"]);
+  assert.deepEqual(triggeredLenses(["web/x.tsx"], custom), ["security", "ui", "ux", "docs", "a11y"]);
+  assert.deepEqual(triggeredLenses(["api/openapi.yaml", "bin/run"], []), ["security", "ux", "docs"]);
+  assert.deepEqual(triggeredLenses(["tests/notes.md"], []), ["docs"]);
+  assert.deepEqual(triggeredLenses([], []), [], "empty diff triggers nothing");
+  assert.deepEqual(triggeredLenses(["lib/x.ts"], []), ["security", "docs"]);
 });
 
 test("lenses adds triggered reviewers, reports missing ones, never removes", () => {
@@ -264,10 +265,10 @@ test("lenses adds triggered reviewers, reports missing ones, never removes", () 
   s.mut(["set", s.job, `head=${head}`]);
   const res = s.mut(["lenses", s.job]);
   assert.equal(res.code, 0, res.err);
-  assert.deepEqual(res.out.slice(0, -1).sort(), ["added a11y", "added ui", "missing ux"]);
+  assert.deepEqual(res.out.slice(0, -1).sort(), ["added a11y", "added ui", "missing docs", "missing ux"]);
   const st = JSON.parse(readFileSync(path.join(s.dir, "state.json"), "utf8"));
   assert.deepEqual(st.lenses, ["code", "security", "ui", "a11y"]);
-  assert.deepEqual(s.mut(["lenses", s.job]).out.slice(0, -1), ["missing ux"]);
+  assert.deepEqual(s.mut(["lenses", s.job]).out.slice(0, -1), ["missing ux", "missing docs"]);
 });
 
 test("lenses needs worktree, base and head", () => {

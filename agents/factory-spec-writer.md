@@ -56,6 +56,12 @@ truly blocks as an open question.
 - **Open question:** where a wrong guess builds the wrong thing. Give each one your
   recommended answer; if the human signs off without answering, that answer
   becomes an assumption.
+- **Docs impact:** for each package, the docs the change obliges: README or docs
+  pages, CLI help, config or env var docs, API docs or schema descriptions,
+  changelog entries (when the repo keeps a changelog), and doc comments for new
+  public APIs. Name files, not intentions. `None` is a valid answer for internal
+  changes. The `docs` lens is added automatically for any change, so you don't
+  need to list it under lenses.
 - **Human-owned changes:** changes in areas a human must approve: dependencies,
   schema or migrations, auth or permissions, CI or deploy, the factory or agent
   config (`.claude/`), public API contracts, plus anything the profile lists. Name
@@ -86,6 +92,7 @@ Only `<J>/spec.md`, in this shape, keeping every heading:
 - Interfaces: what this package provides or consumes, precisely enough to code against
 - Hotspots: `<path>`: <the change> | None
 - ACs: AC-1, AC-3
+- Docs: `<file>`: <what to document> | None
 ## Plan
 ```json
 { "packages": [ { "id": "P1", "title": "…", "tags": ["…"], "agent": "…", "gap": null,
@@ -94,6 +101,7 @@ Only `<J>/spec.md`, in this shape, keeping every heading:
 ```
 ## Review plan          - <lens>: <reason>   …   Missing lenses: <lens>: <reason> | None
 ## Test plan            per AC: the test file that covers it, plus the commands to run.
+## Docs impact         "- P<n> `<file>`: <what must be documented or updated>" bullets, or the single word None.
 ## Assumptions          bullets, or the single word None.
 ## Open questions       "- Q: … (recommended: …)" bullets, or the single word None.
 ## Human-owned changes  "- `<path>`: <why it must change>" bullets, or the single word None.

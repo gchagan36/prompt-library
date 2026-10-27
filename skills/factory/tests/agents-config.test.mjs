@@ -101,6 +101,22 @@ test("SKILL.md: frontmatter, size, spawn prompts carry contract paths, reference
   for (const ref of refs) assert.ok(existsSync(path.join(SKILL_DIR, "references", ref)), ref);
 });
 
+test("docs: the lens exists, comment rules reach builders, and docs impact flows spec → build → approver", () => {
+  const docs = reviewers.find((r) => r.fm.name === "factory-review-docs");
+  assert.ok(docs, "factory-review-docs missing");
+  for (const rule of [/only a local copy of the repo/, /Tracker or review references/, /History narration/, /restate the code/]) {
+    assert.match(docs.text, rule);
+  }
+  const contract = read(path.join(SKILL_DIR, "references/builder-contract.md"));
+  assert.match(contract, /only a local copy of the repo/);
+  assert.match(contract, /say why, not what/);
+  assert.match(contract, /^## Docs {2,}/m);
+  assert.match(agents.find((a) => a.fm.name === "factory-spec-writer").text, /^## Docs impact /m);
+  const approver = agents.find((a) => a.fm.name === "factory-approver").text;
+  assert.match(approver, /Docs delivered/);
+  assert.match(approver, /checks 1–9/);
+});
+
 test("every factory file stays under 800 lines", () => {
   const files = [
     ...agents.map((a) => path.join(AGENTS_DIR, a.file)),

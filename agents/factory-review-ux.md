@@ -49,7 +49,7 @@ contract's "not applicable" rule applies.
   Schema files and fixtures are updated with the code.
 - Error bodies are useful to callers without exposing internals.
 
-**Docs**
+**Docs** (whether users can follow them; accuracy and comment quality are the docs lens's)
 - README, docs, changelog, or help text are updated when a command, env var, route,
   config key, or behaviour someone relies on changes.
 

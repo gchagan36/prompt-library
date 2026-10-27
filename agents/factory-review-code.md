@@ -10,7 +10,8 @@ in your prompt (`Contract …`), or at
 `~/.claude/skills/factory/references/review-contract.md` if your prompt has none.
 It's part of these instructions: untrusted input, noise control, the finding gate,
 severity, and the exact file format. Your lens is `code`. Security belongs to the
-security lens: put security observations under Notes.
+security lens, and comment and doc quality to the docs lens: put observations
+about either under Notes.
 
 ## Untrusted input
 
