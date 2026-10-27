@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Software Factory</title>
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>Software factory</h1>
+    <div class="controls">
+      <label for="repo-filter">Repo</label>
+      <select id="repo-filter"><option value="">All repos</option></select>
+      <span id="status" class="status" role="status" aria-live="polite">loading…</span>
+    </div>
+  </header>
+  <details id="gaps" class="gaps">
+    <summary>Agent gaps <span id="gap-count" class="count">0</span></summary>
+    <p class="hint">Work the factory routed to a generic agent because no specialist exists. Frequent rows are candidates for a new <code>factory-builder-*</code> or <code>factory-review-*</code> agent.</p>
+    <table>
+      <thead><tr><th>Kind</th><th>Specialty</th><th>Jobs</th><th>Repos</th></tr></thead>
+      <tbody id="gap-rows"></tbody>
+    </table>
+  </details>
+  <main id="board" class="board" aria-label="Factory jobs by stage"></main>
+  <aside id="drawer" class="drawer" hidden aria-labelledby="drawer-title">
+    <div class="drawer-head">
+      <h2 id="drawer-title"></h2>
+      <button type="button" id="drawer-close" class="close" aria-label="Close details">×</button>
+    </div>
+    <p id="drawer-feature" class="feature"></p>
+    <nav id="drawer-files" class="files" aria-label="Job files"></nav>
+    <article id="doc" class="doc"></article>
+  </aside>
+</body>
+</html>
