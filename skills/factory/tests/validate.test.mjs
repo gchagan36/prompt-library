@@ -24,7 +24,7 @@ const cases = {
   gap: [["react-ui", "a-b-c-d"], ["a-b-c-d-e", "React", "-x"]],
   lens: [["code", "a11y", "a-b-c"], ["a-b-c-d", "Code", ""]],
   pr: [["https://github.com/o/r/pull/12"], ["http://github.com/o/r/pull/1", "https://github.com/o/r/issues/1", "https://github.com/o/r/pull/1/files", "https://evil.com/o/r/pull/1"]],
-  note: [["round 1: waiting on ux, ui (#5) a/b_c+d=e@f-g"], ["", "x".repeat(161), "has `tick`", "dollar $x", "new\nline"]],
+  note: [["round 1: waiting on ux, ui (#5) a/b_c+d=e-f"], ["mention @someone", "", "x".repeat(161), "has `tick`", "dollar $x", "new\nline"]],
   stamp: [["2026-10-27T18:00:00Z"], ["2026-10-27T18:00:00.123Z", "2026-10-27 18:00:00Z"]]
 };
 

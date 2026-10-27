@@ -86,5 +86,12 @@ export function validatePlan(plan, roster, files) {
   };
 }
 
-// Files a package touched that it neither owns nor lists as a hotspot.
-export const outOfScope = (pkg, files) => files.filter((f) => !matchAny(pkg.owns, f) && !pkg.hotspots.includes(f));
+// Files a package touched that it neither owns nor lists as a hotspot. With `allPackages`
+// (the --unowned pass), files no package owns are allowed too; other packages' files never are.
+export const outOfScope = (pkg, files, allPackages = null) =>
+  files.filter(
+    (f) =>
+      !matchAny(pkg.owns, f) &&
+      !pkg.hotspots.includes(f) &&
+      !(allPackages && !allPackages.some((p) => matchAny(p.owns, f)))
+  );

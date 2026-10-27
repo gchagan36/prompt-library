@@ -39,7 +39,7 @@ const COMMANDS = Object.freeze({
 
 export const USAGE = `usage: factoryctl <command> ...   (see skills/factory/references/state.md)
   <job> is <repo>/<id>. Mutating commands end with --lease <token> --expect <hash>.
-  repo | create <repo> <file> [--min N] | claim <job> [--reclaim] | release <job>
+  repo | create <repo> <file> [--min N] | claim <job> | release <job>
   hash <job> | show <job> | validate [<repo>] | list [--repo <repo>]
   set <job> k=v... | note <job> --text|--append <t> | note <job> --line <file> <n>
   roster <job> <repo-path> | plan <job> | pkg <job> <P> <status> | lens <job> <lens>

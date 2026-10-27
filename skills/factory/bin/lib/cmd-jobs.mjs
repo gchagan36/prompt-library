@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { Fail } from "./errors.mjs";
 import { git } from "./git.mjs";
-import { checkToken, findOwner, isSameOwner, leaseStatus, newLease, readLease, withClaimLock, writeLease } from "./lease.mjs";
+import { checkToken, findOwner, leaseStatus, newLease, readLease, withClaimLock, writeLease } from "./lease.mjs";
 import { factoryHome, jobDir, jobsDir, now, repoFile, seqDir } from "./paths.mjs";
 import { atomicWrite, parseJson, readGuarded, readStateText, restoreState, serialize, sha256, writeState } from "./store.mjs";
 import { allJobs, openJob, splitAuth, validationCtx } from "./jobs.mjs";
@@ -119,17 +119,15 @@ export function cmdCreate(ctx, args) {
 }
 
 export function cmdClaim(ctx, args) {
-  const reclaim = args.length === 2 && args[1] === "--reclaim";
-  if (args.length !== 1 && !reclaim) throw new Fail(2, "usage: claim <job> [--reclaim]");
+  // No same-session reclaim: subagents run inside the orchestrator's claude process, so
+  // "same owner process" can't tell them apart. Only a free lease can be claimed.
+  if (args.length !== 1) throw new Fail(2, "usage: claim <job>");
   const job = openJob(ctx, args[0]);
   withClaimLock(job.dir, () => {
     const current = readLease(job.dir);
     const status = leaseStatus(current, ctx.env);
     const owner = findOwner(ctx.env);
-    if (reclaim && (status !== "live" || !isSameOwner(current, owner))) {
-      throw new Fail(6, "reclaim needs a live lease held by this session");
-    }
-    if (!reclaim && status === "live") {
+    if (status === "live") {
       throw new Fail(6, `lease held by live session pid ${current.pid} since ${current.claimed}`);
     }
     const { text, hash } = readStateText(job.dir);

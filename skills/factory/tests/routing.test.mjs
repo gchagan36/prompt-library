@@ -6,7 +6,7 @@ import { agentDirs, parseFrontmatter } from "../bin/lib/agents.mjs";
 import { globToRegExp, isGlob, isRepoPath, matchGlob } from "../bin/lib/glob.mjs";
 import { extractPlanBlock } from "../bin/lib/plan.mjs";
 import { needsSecurity, triggeredLenses } from "../bin/lib/routing.mjs";
-import { commitFiles, ctl, git, setup, tempDir } from "./helpers.mjs";
+import { commitFiles, ctl, git, setup, tempDir, writeJson } from "./helpers.mjs";
 
 const agent = (name, description, extra = "") => `---\nname: ${name}\ndescription: ${description}\n${extra}---\n\nBody.\n`;
 
@@ -196,6 +196,40 @@ test("ownership flags files outside the package, allows hotspots, needs a signed
   assert.equal(ctl(s.env, ["ownership", s.job, "P1"]).code, 2);
   s.writeSpec(specWith(JSON.stringify(plan({ lenses: ["code"] }))));
   assert.equal(ctl(s.env, ["ownership", s.job, "P1", head, clean]).code, 3, "spec changed after sign-off");
+});
+
+test("ownership --unowned also allows files no package owns, never another package's", () => {
+  const s = routed();
+  s.writeSpec(specWith(JSON.stringify(plan())));
+  s.mut(["plan", s.job]);
+  const { wt, base } = withWorktree(s);
+  const head = commitFiles(wt, { "lib/c.ts": "c", "README.md": "new", "web/x.tsx": "changed" });
+  const res = ctl(s.env, ["ownership", s.job, "P2", base, head, "--unowned"]);
+  assert.equal(res.code, 1);
+  assert.deepEqual(res.out.filter(Boolean), ["lib/c.ts"]);
+  assert.deepEqual(ctl(s.env, ["ownership", s.job, "P2", base, head]).out.filter(Boolean).sort(), ["README.md", "lib/c.ts"]);
+});
+
+test("plan during rework keeps lenses a round already used, so rounds stay valid", () => {
+  const s = routed();
+  s.writeSpec(specWith(JSON.stringify(plan({ lenses: ["code", "security"] }))));
+  s.mut(["plan", s.job]);
+  const { wt } = withWorktree(s);
+  const head = commitFiles(wt, { "web/y.tsx": "y" });
+  s.mut(["set", s.job, `head=${head}`]);
+  assert.equal(s.mut(["lenses", s.job]).code, 0);
+  assert.equal(s.mut(["round", s.job]).code, 0);
+  const note = writeJson(tempDir(), "fb.json", "unused");
+  writeFileSync(note, "Please also handle empty input.\n");
+  assert.equal(s.mut(["feedback", s.job, note]).code, 0);
+  assert.equal(s.mut(["set", s.job, "stage=spec"]).code, 0);
+  s.writeSpec(specWith(JSON.stringify(plan({ lenses: ["code"] }))));
+  const res = s.mut(["plan", s.job]);
+  assert.equal(res.code, 0, res.err);
+  const st = JSON.parse(readFileSync(path.join(s.dir, "state.json"), "utf8"));
+  assert.deepEqual(st.lenses, ["code", "security", "ui", "a11y"]);
+  assert.ok(st.packages.every((p) => p.status === "pending"));
+  assert.equal(ctl(s.env, ["validate", s.repo]).code, 0);
 });
 
 test("ownership needs a worktree", () => {

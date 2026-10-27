@@ -108,20 +108,11 @@ test("dead owner, reused pid, other host and expired TTL all free the lease", ()
   assert.equal(ctl(s.env, ["set", s.job, "stage=build", "--lease", s.token, "--expect", s.hash]).code, 6, "old token is dead");
 });
 
-test("reclaim rotates the token only for the same live owner", () => {
+test("claim never hands a live lease to its own session again (no reclaim)", () => {
   const s = setup();
-  const re = ctl(s.env, ["claim", s.job, "--reclaim"]);
-  assert.equal(re.code, 0, re.err);
-  assert.notEqual(re.out[0], s.token);
-  assert.equal(ctl(s.env, ["set", s.job, "stage=build", "--lease", s.token, "--expect", s.hash]).code, 6);
-  const fresh = re.out[0];
-  const lease = readJson(leaseFile(s));
-  const me = psInfo(process.pid);
-  writeFileSync(leaseFile(s), JSON.stringify({ ...lease, pid: process.pid, pstart: me.lstart }));
-  assert.equal(ctl(s.env, ["claim", s.job, "--reclaim"]).code, 6, "different live owner");
-  writeFileSync(leaseFile(s), JSON.stringify({ ...lease, pid: deadPid() }));
-  assert.equal(ctl(s.env, ["claim", s.job, "--reclaim"]).code, 6, "free lease");
-  assert.match(fresh, /^[0-9a-f]{32}$/);
+  assert.equal(ctl(s.env, ["claim", s.job, "--reclaim"]).code, 2, "reclaim is not a command");
+  assert.equal(ctl(s.env, ["claim", s.job]).code, 6, "same live owner still can't claim");
+  assert.equal(s.mut(["set", s.job, "stage=signoff"]).code, 0, "the original token still works");
 });
 
 test("owner detection walks to the named ancestor, or gives nulls", () => {

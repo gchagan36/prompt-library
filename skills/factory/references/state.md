@@ -85,12 +85,12 @@ $FACTORY_HOME/
 | `signoff` | `null` or `^[0-9a-f]{64}$`: sha256 of the `spec.md` a human signed off. |
 | `packages[]` | `id` `^P[1-9]$` (unique, in order); `title` (title pattern); `agent` `^factory-builder(-[a-z0-9]+){0,3}$`; `gap` `null` or `^[a-z0-9]+(-[a-z0-9]+){0,3}$`; `status` `pending`, `building`, `done`. Max 9. |
 | `lenses` | Non-empty, unique, each `^[a-z0-9]+(-[a-z0-9]+){0,2}$`, must include `code`. |
-| `round`, `rounds` | `round == rounds.length`. Each round has exactly one chip per lens in `lenses` at the time it was opened: `pending`, `PASS`, or `CHANGES`. |
+| `round`, `rounds` | `round == rounds.length`. Each round holds a chip per lens that was in `lenses` when it opened (`pending`, `PASS`, or `CHANGES`); the validator checks that every chip key is a current lens and `code` is present. Lenses never shrink once a round exists, so old rounds stay valid. |
 | `rework` | Integer 0–10. |
 | `feedback` | Array of prose strings (≤ 4000 chars each), oldest first. |
 | `decision` | `null`, `APPROVE`, `ESCALATE`, or `APPROVE (human)`. |
 | `pr` | `null` or `^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pull/[0-9]+$`. |
-| `note` | `^[A-Za-z0-9 ,.:;()#/_+=@-]{1,160}$`. |
+| `note` | `^[A-Za-z0-9 ,.:;()#/_+=-]{1,160}$`. No `@`: notes are posted to GitHub, where it would ping people. |
 | `created`, `updated` | UTC `YYYY-MM-DDTHH:MM:SSZ`. Set by the helper. |
 
 Unknown keys are invalid. Key lookups use `Object.hasOwn` so `constructor=…` and
@@ -144,14 +144,13 @@ arguments). Output is plain text, one value per line, unless noted.
 |---|---|---|
 | `repo` | Registers the repo containing the cwd (writes `repo.json`). | the repo key |
 | `create '<repo>' '<file>' [--min N]` | Reads `{ slug, issue, title, feature, target }` from a JSON file written with the Write tool. Needs `repo` first (exit 5 otherwise). Reserves the next number atomically with an exclusive `mkdir` of `repos/<repo>/seq/NNN` (retry on `EEXIST`; `N` is a floor from remote `factory/*` branches). `issue` and an `i<N>` slug must agree both ways, writes `state.json` (`stage: spec`, `note: writing spec`, everything else empty) and a lease. | `id`, `token`, `hash` |
-| `claim '<job>'` | Takes a free lease. | `token`, `hash` |
-| `claim '<job>' --reclaim` | Only when the lease is live **and** its `pid`/`pstart` equal this caller's owner process (same session, e.g. the token was lost to context compaction). Issues a new token; the old one stops working. Otherwise exit 6. | `token`, `hash` |
+| `claim '<job>'` | Takes a free lease. There is no reclaim of a live lease, even by the same session: subagents share the orchestrator's process. Refuses (exit 2) a job whose `state.json` is invalid; a human must repair or delete it. | `token`, `hash` |
 | `release '<job>'` + lease/expect | Sets `released`. Allowed only at a resting stage. | `hash` |
 | `hash '<job>'` | | `hash` |
 | `show '<job>'` | | state JSON |
 | `validate ['<repo>']` | Validates every job (or every repo's jobs). Exit 2 names the first bad job and field. | `ok` |
 | `list [--repo '<repo>']` | All jobs with lease status. | JSON array: `{ repo, id, title, stage, lease: live\|free\|released, orphan, note, updated }`; an unreadable or invalid job appears with `invalid: "<message>"` |
-| `set '<job>' 'k=v' …` | Token fields only: `stage target branch linked worktree base head signoff rework decision pr`. `null` clears. | `hash` |
+| `set '<job>' 'k=v' …` | Token fields only: `stage target branch linked worktree base head signoff rework decision pr`. `null` clears. **Gated:** `decision=APPROVE` needs every lens `PASS` in the last round and `signoff` equal to the current `spec.md` hash; `stage=pr-open` needs `decision` `APPROVE` or `APPROVE (human)` and a `pr`. Exit 2 otherwise. | `hash` |
 | `note '<job>' --text '<t>'` / `--append '<t>'` | Note charset, ≤160 (append trims from the left). | `hash` |
 | `note '<job>' --line '<file>' '<n>'` | Copies line n of a job-folder file, unsafe chars → `_`, cut to 160. A secret-shaped line becomes `possible secret in <name>`. | `hash` |
 | `pkg '<job>' '<P>' '<status>'` | Sets one package's status. | `hash` |
@@ -166,8 +165,8 @@ arguments). Output is plain text, one value per line, unless noted.
 | `gaps` | Groups the ledger by (kind, specialty). | JSON array: `{ kind, specialty, count, repos, jobs, lastSeen, reasons }`, most frequent first |
 | `scan '<file>' …` | Secret scan. Exit 1 and print `file:line` per hit, never the match. | |
 | `roster '<job>' '<repo-path>'` | Discovers agents (see **Roster** below) and writes `roster.json` into the job folder for the spec writer. | `hash` of roster.json |
-| `plan '<job>'` | Parses the spec's plan block (see **Plan block**), validates it, checks every `agent` is a builder in `roster.json` and every lens a reviewer in it, then sets `packages` and `lenses`. Only in stage `spec` or `signoff`. Exit 2 names the first bad field. | `hash` |
-| `ownership '<job>' '<P>' '<from-sha>' '<to-sha>'` | Runs `git diff --name-only <from>..<to>` in the job's worktree (`--no-renames`) and prints each changed file that package `<P>` neither owns nor lists as a hotspot. Exit 1 if any. Re-parses the plan from `spec.md` and requires a valid sign-off (exit 2 if none, 3 if `spec.md` changed since). | files |
+| `plan '<job>'` | Parses the spec's plan block (see **Plan block**), validates it, checks every `agent` is a builder in `roster.json` and every lens a reviewer in it, then sets `packages` (all `pending`) and `lenses` (unioned with the current lenses once any round exists). Only in stage `spec` or `signoff`. Exit 2 names the first bad field. | `hash` |
+| `ownership '<job>' '<P>' '<from-sha>' '<to-sha>' ['--unowned']` | Runs `git diff --name-only <from>..<to>` in the job's worktree (`--no-renames`) and prints each changed file that package `<P>` neither owns nor lists as a hotspot. With `--unowned`, files no package owns are allowed too (never another package's). Exit 1 if any. Re-parses the plan from `spec.md` and requires a valid sign-off (exit 2 if none, 3 if `spec.md` changed since). | files |
 | `lenses '<job>'` | Computes the lenses the diff `base..head` requires (see **Diff triggers**), adds any missing ones that have a reviewer in `roster.json`, and prints `added <lens>` / `missing <lens>` lines (missing = triggered but no reviewer: a reviewer gap). Never removes a lens. | lines, then `hash` |
 
 ### Roster
@@ -205,7 +204,9 @@ Only YAML frontmatter is read; symlinks are followed only to regular files.
 
 - `tags`: 1–6 unique tags `^[a-z0-9]+(-[a-z0-9]+){0,2}$`, primary tag first.
 - `owns`: 1–20 repo-relative globs (`*`, `**`, `?` only), no leading `/`, no `..`
-  segment, no backslash. `hotspots`: 0–10 repo-relative file paths, same rules, no
+  segment, no backslash. To bound regex backtracking: at most 2 `**` segments
+  (consecutive ones collapse into one), `**` only as a whole segment, and at most 8
+  other wildcards. Reviewer `Triggers:` globs follow the same rules. `hotspots`: 0–10 repo-relative file paths, same rules, no
   globs.
 - `depends`: ids of **earlier** packages only (v1 runs packages in order).
 - `owns` globs of different packages must not overlap on any file that exists in

@@ -95,9 +95,6 @@ export function checkToken(lease, token) {
   }
 }
 
-export const isSameOwner = (lease, owner) =>
-  owner.pid !== null && lease.pid === owner.pid && lease.pstart === owner.pstart;
-
 // Serialises claims on one job with an exclusive lock directory.
 export function withClaimLock(dir, fn) {
   const lock = path.join(dir, ".claim.lock");

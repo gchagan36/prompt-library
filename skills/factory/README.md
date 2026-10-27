@@ -91,6 +91,32 @@ optional `Triggers: …` for reviewers. The skill itself needs no change.
 node --test 'skills/factory/tests/*.test.mjs'   # Node 24 needs the glob, not the directory
 ```
 
+## Known limits
+
+These are accepted for now, found by the security review on 2026-10-27:
+
+- **No sandbox.** Every agent runs as you. A prompt-injected builder could edit
+  `.git/config` or hooks, or read files in `$HOME`.
+  - The factory's integrity checks catch tampering with its own state: hash-checked
+    state, job-folder snapshots, per-review hashes, branch checks, and helper-gated
+    APPROVE and PR transitions.
+  - They don't stop an agent from attacking the rest of your machine. For real
+    isolation, run sessions in a container or under the Claude Code sandbox.
+- **Prose rules only.** Subagents are told never to run `factoryctl`, but nothing
+  enforces it. They can't get a lease token, though: tokens appear only in the
+  orchestrator's own Bash output, and `lease.json` stores just a hash. Any write
+  they attempt fails with exit 6, and any direct edit fails the hash check.
+- **Same-session recovery.** If the orchestrator loses its lease token, the job stays
+  locked until that session exits. Run `/factory resume` from a new session after it
+  does.
+- **Narrow secret scan.** It covers common token formats only (GitHub, OpenAI and
+  Anthropic, Stripe, AWS, Slack, PEM keys, JWTs). It doesn't cover generic
+  `password=` lines, commit messages, or filenames.
+- **Same-user threats not covered:**
+  - The dashboard port can be squatted by another local process.
+  - Races on job files are possible during the narrow window between the
+    symlink check and the read.
+
 ## Relationship to Scout's factory
 
 This is a repo-agnostic rewrite of Scout's `.claude/skills/factory`, carrying over its

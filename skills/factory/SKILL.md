@@ -85,15 +85,17 @@ ledger are in `references/routing.md`. Branches, PRs, issues, and sync are in
 
 - **Hold the keys in context.** For each job this session owns, keep its lease
   `token` and latest state `hash` (both printed by `fctl`). Every write ends with
-  `--lease '<token>' --expect '<hash>'`. If you lost them (e.g. after compaction),
-  run `fctl claim '<job>' --reclaim`, then run **Integrity: job folder** against the
-  last snapshot hash you still hold, or escalate with "orchestrator lost its keys"
-  if you hold none.
+  `--lease '<token>' --expect '<hash>'`. Repeat both in each progress line you
+  write, so they survive context compaction. If you lose them anyway, stop: tell
+  the user the job is safe but locked to this session, and to run
+  `/factory resume <id>` from a new session after this one exits (the lease frees
+  when its process ends). There is deliberately no same-session reclaim: subagents
+  run inside this session's process and could use it to mint a token.
 - **Exit codes are verdicts.** 3 from any write: the state was changed outside
   you. Run `fctl restore '<job>' '<hash>' --lease '<token>'` and go to **Escalate** with "state.json
   was changed outside the orchestrator". 4: stop, change nothing, tell the user.
-  6: another session owns the job, or your token is stale; never retry with a
-  stolen lease. 2: go to **Escalate** with "invalid <field>"; never repair a value.
+  6 on `claim`: another live session owns the job. 6 on a write to a job you own:
+  your token was revoked, which only tampering can do; stop and tell the user. 2: go to **Escalate** with "invalid <field>"; never repair a value.
 - **Context comes from files.** Spawn prompts carry only the job ref, paths, round,
   and package. Agents read the rest from `<J>`, `<W>`, and the repo profile.
 - **One writer per file.** Agents write only their own file. The orchestrator
@@ -213,8 +215,10 @@ review").
 `fctl set '<job>' 'stage=signoff'`. Show the human, from `spec.md` and the state:
 Summary; Acceptance criteria; the packages as a table (id, title, tags, builder,
 **gap** if any, owns); the review lenses and why; Assumptions; Open questions with
-their recommended answers; Human-owned changes; and any recorded gaps ("no
-specialist for react-ui: the generic builder will build P2"). Give the full path to
+their recommended answers; Human-owned changes; any recorded gaps ("no
+specialist for react-ui: the generic builder will build P2"); and, verbatim, the
+profile's `Setup` command if it has one, because **Prepare deps** will run it and
+signing off approves it. Give the full path to
 `spec.md`. Then ask with AskUserQuestion:
 
 - **Sign off**: `fctl signoff '<job>'`. Open questions are settled by their
@@ -238,7 +242,8 @@ For each package in plan order (pass `round` and the message for this pass):
    `Job <job>, package <P>. Job folder <J>. Worktree <W>. Repo <R>. Contract <skill>/references/builder-contract.md. Build round 0. Write <J>/build-<P>.md.`
    Later passes: `SendMessage` the pass's message to `builder-<id>-<P>`.
 3. On its idle notification: integrity diff, then **Build check**, then
-   `fctl ownership '<job>' '<P>' '<from>' '<new head>'`. On exit 1, send the
+   `fctl ownership '<job>' '<P>' '<from>' '<new head>'`, adding `'--unowned'` for
+   the last package on a rework or feedback pass. On exit 1, send the
    builder one message naming the files and asking it to move those changes out or
    revert them; recheck once; still failing → **Escalate** "package <P> changed
    files it does not own".
@@ -253,18 +258,24 @@ the failed check, wait, check again, then **Escalate** "build check failed: <whi
 ### Review round
 
 1. `fctl lenses '<job>'`. For each `missing <L>` line, log a reviewer gap
-   (`kind: "reviewer"`, `specialty: <L>`, `fallback: "none"`).
+   (`kind: "reviewer"`, `specialty: <L>`, `package: null`, `fallback: null`).
 2. `fctl round '<job>'` → round r. `mkdir '<J>/round-<r>'`. Snapshot, branch check
    start. In **one message**, spawn `factory-review-<L>` for every lens in the
    round:
    `Job <job>, round <r>. Job folder <J>. Worktree <W>. Repo <R>. Contract <skill>/references/review-contract.md. Diff: git -C '<W>' diff <base>..<head>. Write <J>/round-<r>/review-<L>.md.`
    with the full shas filled in.
-3. As each finishes, `fctl chip '<job>' '<L>' '<J>/round-<r>/review-<L>.md'`. A
-   reviewer that wrote nothing is spawned once more; still nothing → its chip stays
-   `CHANGES`, and after the round **Escalate** "reviewer <L> wrote no review".
-4. When all are done: integrity diff and branch check.
+3. As each finishes, immediately run `sha256sum '<J>/round-<r>/review-<L>.md'` and
+   keep the hash in context, then `fctl chip '<job>' '<L>' '<J>/round-<r>/review-<L>.md'`.
+   Reviewers share a folder, so this pins each file at the moment its own author
+   finished. A reviewer that wrote nothing is spawned once more; still nothing →
+   its chip stays `CHANGES`, and after the round **Escalate** "reviewer <L> wrote no
+   review".
+4. When all are done: integrity diff, branch check, and re-hash every review file.
+   Any hash that differs from the one pinned at its reviewer's finish →
+   **Escalate** "review <L> changed after its reviewer finished".
 5. Any `CHANGES` and `rework < MAX_REWORK`: `fctl set 'rework=<n+1>' 'stage=build'`,
-   then **Build packages** with this message for each package:
+   `fctl pkg '<job>' '<P>' 'pending'` for every package (so a crash mid-pass resumes
+   at the right one), then **Build packages** with this message for each package:
    `Round <r> reviews are in <J>/round-<r>/. Resolve every CRITICAL/HIGH finding in reviews marked VERDICT: CHANGES that falls in files your package owns<, and in files no package owns — last package only>. Commit, and append a "Round <r> fixes" section to build-<P>.md.`
    Then start the next round. Otherwise go to **Approve**; the approver escalates
    when any chip in the last round is `CHANGES`.
@@ -298,7 +309,8 @@ command.
 
 - `stage: signoff` → `fctl signoff`, then continue at step 8 of **/factory <feature>**.
 - `stage: needs-human`, branch with commits since `base` → if the worktree is gone,
-  re-add it (`git worktree add '<W>' 'factory/<id>'`, then **Prepare deps**). Set
+  re-add it (`git worktree add '<W>' 'factory/<id>'`, `fctl set 'worktree=<W>'`,
+  then **Prepare deps**). Set
   `head` to the branch tip and `decision=APPROVE (human)`, then **Ship**.
 - Anything else: refuse, release, and point to `/factory rework <id> <note>`.
 
@@ -313,7 +325,9 @@ If the job has a PR that isn't `OPEN`, refuse: sync handled it, or it needs a ne
 under `## Revisions`. After sign-off:
 
 - No branch yet: continue at step 8.
-- Otherwise: re-add the worktree if needed, `fctl set 'stage=build'`, and run
+- Otherwise: if `worktree` is `null`, re-add it (`git worktree add '<W>' 'factory/<id>'`,
+  `fctl set 'worktree=<W>'`, **Prepare deps**). `fctl set 'stage=build'` (`plan`
+  already reset every package to `pending`), and run
   **Build packages** with this message (new packages are spawned at round 0):
   `Human feedback #<k> is in state.json. Address the parts in files your package owns<, and unowned files — last package only>, commit, and append a "Feedback <k>" section to build-<P>.md.`
   Then **Review round**, **Approve**, and **Ship**, which updates the existing PR.
@@ -325,10 +339,11 @@ authorization.
 ## /factory resume <id>
 
 `fctl claim '<job>'` (only works when the lease is free). Then continue from the
-stage: `spec` → spawn the spec writer fresh; `signoff` → **Sign-off**; `build` → the
+stage: `spec` → spawn the spec writer fresh; `signoff` (resting, but resumable) →
+**Sign-off**; `build` → the
 first package not `done` (spawn its builder by name; it rebuilds context);
 `review` → open a new round (note "round <r> abandoned"); `approve` → re-run
-**Approve**. A resting stage: release and point to `approve` or `rework`.
+**Approve**. Any other resting stage: release and point to `approve` or `rework`.
 
 ## /factory status · sync · dashboard · gaps
 

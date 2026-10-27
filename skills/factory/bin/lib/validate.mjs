@@ -17,11 +17,11 @@ export const PATTERNS = Object.freeze({
   lens: /^[a-z0-9]+(-[a-z0-9]+){0,2}$/,
   tag: /^[a-z0-9]+(-[a-z0-9]+){0,2}$/,
   pr: /^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/pull\/[0-9]+$/,
-  note: /^[A-Za-z0-9 ,.:;()#/_+=@-]{1,160}$/,
+  note: /^[A-Za-z0-9 ,.:;()#/_+=-]{1,160}$/,
   stamp: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
 });
 
-export const NOTE_UNSAFE = /[^A-Za-z0-9 ,.:;()#/_+=@-]/g;
+export const NOTE_UNSAFE = /[^A-Za-z0-9 ,.:;()#/_+=-]/g;
 export const WORKING = Object.freeze(["spec", "build", "review", "approve"]);
 export const RESTING = Object.freeze(["signoff", "needs-human", "pr-open", "merged", "closed"]);
 export const STAGES = Object.freeze([...WORKING, ...RESTING]);

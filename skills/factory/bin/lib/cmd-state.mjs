@@ -42,12 +42,31 @@ const parsePair = (pair) => {
   return [key, SETTERS[key](pair.slice(eq + 1))];
 };
 
+// Defence in depth for the two transitions that lead to a PR: the helper itself refuses
+// them unless the paper trail supports them, whatever the caller's prose says.
+function gateTransitions(next, prev, dir) {
+  if (next.decision === "APPROVE" && prev.decision !== "APPROVE") {
+    const last = next.rounds.at(-1);
+    const allPass = last !== undefined && next.lenses.every((l) => last[l] === "PASS");
+    if (!allPass) throw new Fail(2, "decision=APPROVE needs every lens PASS in the last round");
+    if (next.signoff === null || next.signoff !== specHash(dir)) throw new Fail(2, "decision=APPROVE needs a valid sign-off");
+  }
+  if (next.stage === "pr-open" && prev.stage !== "pr-open") {
+    if (next.decision !== "APPROVE" && next.decision !== "APPROVE (human)") throw new Fail(2, "stage=pr-open needs an approval");
+    if (next.pr === null) throw new Fail(2, "stage=pr-open needs pr");
+  }
+}
+
 export function cmdSet(ctx, args) {
   const auth = splitAuth(args);
   if (auth.rest.length < 2) throw new Fail(2, "usage: set <job> k=v ... --lease <token> --expect <hash>");
   const [ref, ...pairs] = auth.rest;
   const changes = Object.fromEntries(pairs.map(parsePair));
-  mutate(ctx, ref, auth, (state) => ({ ...state, ...changes }));
+  mutate(ctx, ref, auth, (state, job) => {
+    const next = { ...state, ...changes };
+    gateTransitions(next, state, job.dir);
+    return next;
+  });
 }
 
 const checkNote = (text) => check(text, PATTERNS.note, "note");

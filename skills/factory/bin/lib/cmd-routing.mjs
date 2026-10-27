@@ -68,25 +68,30 @@ export function cmdPlan(ctx, args) {
     if (state.stage !== "spec" && state.stage !== "signoff") throw new Fail(2, "plan only in stage spec or signoff");
     const plan = parsePlan(readSpec(job.dir));
     const fields = validatePlan(plan, readRoster(job.dir), overlapFiles(job, state));
-    return { ...state, ...fields };
+    // Lenses never shrink once a round has used them (rounds' chips must stay valid).
+    const lenses = state.rounds.length > 0 ? [...new Set([...state.lenses, ...fields.lenses])] : fields.lenses;
+    return { ...state, ...fields, lenses };
   });
 }
 
 const readState = (dir) => parseJson(readStateText(dir).text, "state");
 
-export function cmdOwnership(ctx, args) {
-  if (args.length !== 4) throw new Fail(2, "usage: ownership <job> <P> <from-sha> <to-sha>");
+export function cmdOwnership(ctx, allArgs) {
+  const unowned = allArgs.at(-1) === "--unowned";
+  const args = unowned ? allArgs.slice(0, -1) : allArgs;
+  if (args.length !== 4) throw new Fail(2, "usage: ownership <job> <P> <from-sha> <to-sha> [--unowned]");
   const job = openJob(ctx, args[0]);
   const pkgId = check(args[1], PATTERNS.pkgId, "package");
   const [from, to] = [check(args[2], PATTERNS.sha, "from"), check(args[3], PATTERNS.sha, "to")];
   const state = readState(job.dir);
   if (state.signoff === null) throw new Fail(2, "spec not signed off");
   if (specHash(job.dir) !== state.signoff) throw new Fail(3, "spec.md changed after sign-off");
-  const pkg = parsePlan(readSpec(job.dir)).packages.find((p) => p.id === pkgId);
+  const { packages } = parsePlan(readSpec(job.dir));
+  const pkg = packages.find((p) => p.id === pkgId);
   if (!pkg) throw new Fail(2, `no package ${pkgId}`);
   const wt = worktreeOf(state);
   if (!wt) throw new Fail(5, "no worktree");
-  const stray = outOfScope(pkg, diffNames(wt, from, to));
+  const stray = outOfScope(pkg, diffNames(wt, from, to), unowned ? packages : null);
   stray.forEach((f) => ctx.out(f));
   if (stray.length > 0) throw new Fail(1, `${stray.length} file(s) outside package ${pkgId}`);
 }
