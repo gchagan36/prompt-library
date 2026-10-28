@@ -54,4 +54,10 @@ Comments: sparse; explain why, never what
 
 ## Lenses
 Always: security                             <- lenses to include on every job, beyond the diff triggers
+
+## Review
+Review bots: chatgpt-codex-connector         <- bots whose PR review comments /factory address may list; the login as the GitHub API shows it, with or without [bot]
 ```
+
+Humans need no entry: `/factory address` trusts reviewers with write access to the
+repo. A bot is trusted only if it's listed here and GitHub marks it as a Bot.

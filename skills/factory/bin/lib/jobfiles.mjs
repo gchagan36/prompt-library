@@ -8,7 +8,8 @@ const NAME_RES = [
   /^(issue|spec|decision)\.md$/,
   /^build-P[1-9]\.md$/,
   /^round-[1-9][0-9]?\/review-[a-z0-9]+(-[a-z0-9]+){0,2}\.md$/,
-  /^round-[1-9][0-9]?\/comments-scan\.md$/
+  /^round-[1-9][0-9]?\/comments-scan\.md$/,
+  /^outside-[1-9][0-9]?\.md$/
 ];
 
 export const isAllowedName = (name) => typeof name === "string" && NAME_RES.some((re) => re.test(name));
@@ -67,7 +68,8 @@ const roundFiles = (dir, round) => {
 
 const roundNumber = (name) => Number(name.slice("round-".length).split("/")[0]);
 
-// Existing whitelisted files, in reading order: issue, spec, builds, rounds, decision.
+// Existing whitelisted files, in reading order: issue, spec, builds, rounds, outside
+// review passes, decision.
 export function listJobFiles(dir) {
   const entries = existsSync(dir) ? readdirSync(dir) : [];
   const top = entries.filter((f) => isAllowedName(f) && isPlainFile(path.join(dir, f)));
@@ -77,7 +79,8 @@ export function listJobFiles(dir) {
     if (name === "spec.md") return [1, 0];
     if (name.startsWith("build-")) return [2, Number(name.slice(7, 8))];
     if (name.startsWith("round-")) return [3, roundNumber(name)];
-    return [4, 0];
+    if (name.startsWith("outside-")) return [4, Number(name.slice(8, -3))];
+    return [5, 0];
   };
   const order = (a, b) => {
     const [ra, rb] = [rank(a), rank(b)];

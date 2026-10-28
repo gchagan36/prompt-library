@@ -81,7 +81,7 @@ const initialState = (repo, id, input) => ({
   schema: 1, id, repo, title: input.title, feature: input.feature, issue: input.issue, target: input.target,
   branch: null, linked: null, worktree: null, base: null, head: null, stage: "spec", signoff: null,
   packages: [], lenses: ["code"], round: 0, rounds: [], rework: 0, feedback: [], decision: null, pr: null,
-  note: "writing spec", created: now(), updated: now()
+  outside: [], note: "writing spec", created: now(), updated: now()
 });
 
 const idFor = (n, input) => `${pad(n)}${input.issue === null ? "" : `-i${input.issue}`}-${input.slug}`;
