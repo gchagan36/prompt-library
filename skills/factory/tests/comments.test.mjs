@@ -41,7 +41,7 @@ test("scanText flags tracker, process and history references", () => {
     assert.ok(rules(t).includes("tracker"), t);
   }
   for (const t of ["covers AC-3", "added in review round 2", "per the spec", "as the reviewer asked", "see spec.md",
-    "as discussed", "per our meeting"]) {
+    "as discussed", "per our meeting", "fixes outside review 2 item 3"]) {
     assert.ok(rules(t).includes("process"), t);
   }
   for (const t of ["previously this cached", "now uses the pool", "changed from 30s", "no longer retries",

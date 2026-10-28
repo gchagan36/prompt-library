@@ -29,13 +29,24 @@ export const DECISIONS = Object.freeze([null, "APPROVE", "ESCALATE", "APPROVE (h
 export const CHIPS = Object.freeze(["pending", "PASS", "CHANGES"]);
 export const PKG_STATUSES = Object.freeze(["pending", "building", "done"]);
 export const PROSE_MAX = 4000;
+export const OUTSIDE_PICKS = Object.freeze(["fix", "scope", "skip"]);
+export const OUTSIDE_ITEM_MAX = 30;
+export const OUTSIDE_PASS_MAX = 20;
+const OUTSIDE_ANCHORS = Object.freeze({ t: "discussion_r", r: "pullrequestreview-", c: "issuecomment-" });
+
+// An outside review item's link is rebuilt from the job's own PR, never taken from GitHub.
+export const itemUrl = (pr, id) => `${pr}#${OUTSIDE_ANCHORS[id[0]]}${id.slice(2)}`;
 
 const STATE_KEYS = [
   "schema", "id", "repo", "title", "feature", "issue", "target", "branch", "linked", "worktree", "base",
   "head", "stage", "signoff", "packages", "lenses", "round", "rounds", "rework", "feedback", "decision",
   "pr", "note", "created", "updated"
 ];
+// Keys a job may lack: jobs created before the key existed read it as its default.
+const OPTIONAL_KEYS = ["outside"];
 const PACKAGE_KEYS = ["id", "title", "agent", "gap", "status"];
+const PASS_KEYS = ["items", "picks", "shipped"];
+const ITEM_KEYS = ["id", "reply", "url"];
 
 export const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 export const matches = (re) => (v) => typeof v === "string" && re.test(v);
@@ -82,6 +93,29 @@ const isRound = (lenses) => (r) =>
   Object.hasOwn(r, "code") &&
   Object.keys(r).every((k) => lenses.includes(k) && CHIPS.includes(r[k]));
 
+const isOutsideItem = (pr) => (it) =>
+  hasExactKeys(it, ITEM_KEYS) &&
+  matches(/^[trc]:[1-9][0-9]{0,15}$/)(it.id) &&
+  (it.id[0] === "t" ? Number.isSafeInteger(it.reply) && it.reply >= 1 : it.reply === null) &&
+  it.url === itemUrl(pr, it.id);
+
+// Passes oldest first. Only the latest may be unpicked; picks line up with items.
+const isPass = (pr, last) => (p, i) =>
+  hasExactKeys(p, PASS_KEYS) &&
+  Array.isArray(p.items) && p.items.length >= 1 && p.items.length <= OUTSIDE_ITEM_MAX &&
+  p.items.every(isOutsideItem(pr)) &&
+  (p.picks === null
+    ? i === last && p.shipped === null
+    : Array.isArray(p.picks) && p.picks.length === p.items.length && p.picks.every(oneOf(OUTSIDE_PICKS))) &&
+  nullable(matches(PATTERNS.sha))(p.shipped);
+
+const isOutside = (v, s) =>
+  v === undefined ||
+  (Array.isArray(v) && v.length <= OUTSIDE_PASS_MAX &&
+    (v.length === 0 || matches(PATTERNS.pr)(s.pr)) &&
+    v.every(isPass(s.pr, v.length - 1)) &&
+    isUnique(v.flatMap((p) => p.items.map((it) => it.id))));
+
 const issueMatchesId = (s) => {
   const fromId = issueInId(s.id);
   return fromId === null ? s.issue === null : String(s.issue) === fromId;
@@ -111,6 +145,7 @@ const RULES = [
   ["feedback", (v) => Array.isArray(v) && v.every(isProse)],
   ["decision", oneOf(DECISIONS)],
   ["pr", nullable(matches(PATTERNS.pr))],
+  ["outside", isOutside],
   ["note", matches(PATTERNS.note)],
   ["created", matches(PATTERNS.stamp)],
   ["updated", matches(PATTERNS.stamp)]
@@ -120,7 +155,7 @@ const RULES = [
 // ctx: { home, id?, repo? } — id/repo pin the state to the folder it was read from.
 export function invalidField(state, ctx) {
   if (!isObject(state)) return "state";
-  const extra = Object.keys(state).find((k) => !STATE_KEYS.includes(k));
+  const extra = Object.keys(state).find((k) => !STATE_KEYS.includes(k) && !OPTIONAL_KEYS.includes(k));
   if (extra !== undefined) return `unknown key ${extra.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 40)}`;
   const missing = STATE_KEYS.find((k) => !Object.hasOwn(state, k));
   if (missing !== undefined) return missing;

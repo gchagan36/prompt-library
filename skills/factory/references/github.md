@@ -138,13 +138,29 @@ note.
    ```
    `<type>`: `fix` for repairs, `docs` or `test` when only those change, else `feat`.
    Validate the URL, set `pr`, and post **Issue comment** `PR opened: <url>`.
-   PR already open (after a rework): same push, then
+   PR already open (after a rework or an outside review pass): same push, then
    `gh pr comment '<pr>' --body-file '<tmp>/body.md'` with the new round's record.
+   This comment's body starts with the line
+   `Factory job <id>: PR updated after <feedback k | outside review k>.`, so
+   **Outside review fetch** never lists it as a review comment. If the job's latest
+   outside pass in `fctl show` has `shipped: null` and picks other than `skip`, add
+   `## Outside review <k>` to the body: one line per `fix` or `scope` item, giving
+   its pick and its `url`.
    A failed push or `gh pr create` → **Escalate** "push failed" / "PR creation failed".
-4. **Board move** "In Review".
-5. `git worktree remove '<W>'` (never `--force`). Refused → leave it and say so in
+4. **Replies** (PR already open). Run `fctl replies '<job>'`, which marks the
+   latest outside pass shipped at `head`. For each `reply <n>` line, write
+   `Factory job <id>: addressed in <head sha7>. Leaving this thread open for you to resolve.`
+   to `<tmp>/reply.md`, run `fctl scan '<tmp>/reply.md'`, and then:
+   ```bash
+   gh api --method POST 'repos/<owner>/<name>/pulls/<N>/comments/<n>/replies' -F 'body=@<tmp>/reply.md'
+   ```
+   `link` lines need nothing more: the PR comment already lists them. Never resolve
+   a thread. A failed reply appends `(github: reply)` to `note`.
+5. **Board move** "In Review".
+6. `git worktree remove '<W>'` (never `--force`). Refused → leave it and say so in
    `note`; else `worktree=null`. Keep the branch until sync sees the merge.
-6. `stage=pr-open`, note "PR opened" or "PR updated after feedback <k>".
+7. `stage=pr-open`, note "PR opened", "PR updated after feedback <k>", or "PR
+   updated after outside review <k>".
 
 ## Sync
 
@@ -153,7 +169,10 @@ For a `pr-open` job: validate `pr`, then
 `headRefName` must be `factory/<id>` and `baseRefName` must equal `target`; else
 **Escalate** "PR does not match job" and touch nothing.
 
-- **OPEN:** nothing.
+- **OPEN:** run **Outside review fetch**, then
+  `fctl outside-count '<job>' '<tmp>/threads.json' '<tmp>/reviews.json' '<tmp>/comments.json' '<tmp>/trusted.json'`.
+  If `items <n>` is above 0, report `<id>: <n> new review comment(s). /factory address <id> to triage them.`
+  Change nothing. A failed fetch skips the report.
 - **MERGED:**
   1. Remove the worktree if present (never `--force`); refused → note "worktree left
      for a human" and skip step 2.
@@ -171,3 +190,32 @@ For a `pr-open` job: validate `pr`, then
   4. `stage=merged`, note `merged <sha7> on <date>` plus any notes above.
 - **CLOSED:** `stage=closed`, note "PR closed without merging", keep the branch,
   **Issue comment** that the issue stays open.
+
+## Outside review fetch
+
+Used by `/factory address` and by **Sync**. Split the validated `pr` into `<owner>`,
+`<name>`, and `<N>`.
+
+```bash
+gh api graphql -F owner='<owner>' -F name='<name>' -F number='<N>' -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage} nodes{isResolved isOutdated path line comments(first:50){pageInfo{hasNextPage} nodes{databaseId author{login __typename} body createdAt}}}}}}}' > '<tmp>/threads.json'
+gh api --paginate --slurp 'repos/<owner>/<name>/pulls/<N>/reviews' > '<tmp>/reviews.json'
+gh api --paginate --slurp 'repos/<owner>/<name>/issues/<N>/comments' > '<tmp>/comments.json'
+```
+
+Then decide whose comments count, and write `<tmp>/trusted.json` with the Write tool:
+`{ "self": "<login>", "humans": [...], "bots": [...] }`.
+
+- `self`: `gh api user -q .login`. The factory skips this account's own
+  `Factory job …` posts. Its other comments count like anyone else's.
+- `humans`: every human author, listed with
+  ```bash
+  jq -rs '[(.[0].data.repository.pullRequest.reviewThreads.nodes[].comments.nodes[].author | select(.__typename == "User") | .login), (.[1:][][][].user | select(.type == "User") | .login)] | unique[]' '<tmp>/threads.json' '<tmp>/reviews.json' '<tmp>/comments.json'
+  ```
+  For each login, validate it, then run the write-access check from **Issue
+  intake**, step 2. Keep the ones with `admin`, `maintain`, or `write`. Cache the
+  answers for the session.
+- `bots`: the repo profile's `Review bots:` line, split on commas. Validate each name
+  (`^[A-Za-z0-9-]{1,39}(\[bot\])?$`). No line means `[]`. A name counts only for an
+  author GitHub marks as a Bot, so a user account can't borrow it.
+
+Comments from anyone else are counted and left out, never shown to the builders.

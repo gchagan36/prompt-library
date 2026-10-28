@@ -25,7 +25,14 @@ never merges.
    factory opens a PR to `develop` (or the default branch). Otherwise the job goes
    to `needs-human`.
 6. **Sync** cleans up after you merge: it deletes the branch, closes the issue, and
-   moves the card to Done.
+   moves the card to Done. While the PR is open, it also reports new review
+   comments.
+7. **Address** (optional): `/factory address <id>` lists the new PR review
+   comments from people with write access and from the bots your profile allows.
+   You mark each one `fix`, `scope`, or `skip`. Fixes go straight to the builders.
+   Scope changes go back through the spec and your sign-off. Either way, the change
+   gets a full review round and the approver before the PR is updated, and the
+   factory replies on each thread it addressed. It never resolves threads.
 
 Run `/factory` in as many sessions as you like. Each job is leased to the session
 running it, and a dashboard shows every job across every repo.
@@ -81,6 +88,7 @@ command checks it can write here before it starts.
 /factory approve 004-i57-last-run-timestamp          # sign off a parked spec, or override an escalation
 /factory rework 004-i57-last-run-timestamp <note>    # send notes back through the spec
 /factory resume 004-i57-last-run-timestamp           # pick up a job whose session died
+/factory address 004-i57-last-run-timestamp          # triage and act on outside PR review comments
 /factory status | sync | dashboard | gaps
 ```
 
