@@ -63,7 +63,8 @@ Unless you have evidence specific to this code, skip:
 
 ## 4. Always HIGH
 
-A failing command; an AC with no real test; a changed file under 80% coverage, or
+A failing command; an AC with no real test; a behaviour change, in or outside the ACs, with no test that would fail
+without it; a changed file under 80% coverage, or
 missing from the report, with no integration or E2E test covering it; a changed UI
 flow with no passing E2E test when the profile has an E2E command; a false claim in
 a build file.

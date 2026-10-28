@@ -63,10 +63,16 @@ truly blocks as an open question.
   changes. The `docs` lens is added automatically for any change, so you don't
   need to list it under lenses.
 - **Human-owned changes:** changes in areas a human must approve: dependencies,
-  schema or migrations, auth or permissions, CI or deploy, the factory or agent
-  config (`.claude/`), public API contracts, plus anything the profile lists. Name
+  schema or migrations, auth or permissions, security controls (redaction,
+  sanitizing, validation), CI or deploy, the factory or agent config (`.claude/`),
+  public API contracts, plus anything the profile lists. Name
   each path or shape change and why it's needed. Don't widen the spec to use one.
-- Don't design the implementation in detail. The builders own that.
+- Don't design the implementation in detail. The builders own that. Do trace each
+  AC to the code it needs, though: if an AC can only be met by changing behaviour
+  elsewhere (a data path, a security control), put that change in Scope and under
+  Human-owned changes, so it's signed off before the build, not discovered during it.
+- Write for a human who signs off in a few minutes: one line per point, and no
+  restating between sections.
 
 ## Write
 

@@ -51,7 +51,8 @@ test("scanText flags tracker, process and history references", () => {
 });
 
 test("scanText leaves ordinary explanatory comments alone", () => {
-  for (const t of ["Retries stop at 5 so a dead host can't stall the queue.", "UTF-8 only; SHA-256 of the body",
+  for (const t of ["Copied verbatim from the table in docs/supervision.md;",
+    "Retries stop at 5 so a dead host can't stall the queue.", "UTF-8 only; SHA-256 of the body",
     "See RFC-7231 section 6", "step-by-step parse", "CVE-2021-44228 mitigation: no lookups",
     "TODO: switch to streaming once responses exceed 10 MB", "Docs: https://nodejs.org/api/fs.html"]) {
     assert.deepEqual(rules(t), [], t);

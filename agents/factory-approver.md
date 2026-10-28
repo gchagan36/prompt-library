@@ -39,7 +39,10 @@ agree to?** You don't edit code. Bash is for read-only commands (`git`,
 4. **No scope drift.** Every changed file belongs to some package's owned globs or
    hotspots. The behaviour added matches the spec's Scope, Revisions, and feedback,
    with nothing extra: no unrequested features, refactors of unrelated code, or
-   changed defaults.
+   changed defaults. Every entry under a build file's `## Spec deviations`, and
+   every change a build file calls a judgment call or outside the spec, is drift
+   unless the spec, including its Revisions, now describes it. A reviewer
+   accepting it doesn't count: only the human signs off scope.
 5. **Assumptions honest.** No assumption quietly changes what the human asked for.
    Open questions settled by sign-off were built with their recommended answers.
 6. **Security MEDIUMs handled.** Each MEDIUM in the last security review is fixed or
@@ -60,6 +63,8 @@ categories, plus any paths the profile adds:
 - New, removed, or upgraded dependencies (manifests and lockfiles).
 - Database schema, migrations, or new persistence (tables, files, buckets).
 - Auth, permissions, session, token, CORS, or rate-limit behaviour.
+- Weakening, narrowing, or exempting a security control: redaction, sanitizing,
+  escaping, input validation, or secret scanning.
 - CI, deploy, container, or infrastructure files.
 - Public API contracts: removed or renamed fields, new required inputs, new public
   routes.
