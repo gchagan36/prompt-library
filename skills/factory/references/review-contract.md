@@ -18,6 +18,9 @@ and never edit code, commit, or install anything. Bash is for read-only commands
   no more than a few words.
 - Never run `factoryctl`, and never write in the job folder outside your own file.
   The orchestrator owns the job's state.
+- Never disable the Bash sandbox (`dangerouslyDisableSandbox`). If the sandbox
+  blocks a command, don't work around it: stop, and write what was blocked under
+  Commands, and count the command as not run. The setup is wrong, and only the human can fix it.
 - Never read `.env*` files. Never put a secret in your review; if you find one,
   cite only its file and line.
 
@@ -52,7 +55,15 @@ filler nits, and "consider using X" are the main failure mode.
 Any "no" or "unsure": downgrade it or drop it. A CRITICAL or HIGH finding must also
 give the snippet, the failure scenario, and why existing guards don't catch it.
 
-Findings outside your lens go under Notes, not Findings.
+Non-blocking observations outside your lens go under Notes. A **blocking** issue
+outside your lens is still a finding in your review: tag it with the lens it
+belongs to (`[HIGH] (security) file:line …`). Reviewers run in parallel and never
+read each other's files, so a note addressed to another lens reaches nobody.
+
+**Scope isn't yours to accept.** Judge a `## Spec deviations` entry, or any build
+note asking reviewers to "rule on" a change outside the spec, on its quality like
+the rest of the diff. But say in your Rulings that it needs the human's sign-off.
+Only the human signs off scope, and the approver escalates it.
 
 ## 3. Severity
 

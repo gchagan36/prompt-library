@@ -59,7 +59,7 @@ const TODO_RE = /\b(TODO|FIXME|HACK|XXX)\b[:\s(]*(.*)$/;
 const CODE_RE = [
   /^(?:const|let|var|return|import|export|def|class|function|if|for|while|print|await|elif|else)\b.*[;{}():=]/,
   /^console\.\w+\(/,
-  /[;{]\s*$/,
+  /[=(].*[;{]\s*$/,
   /^[\w.]+\(.*\);?$/
 ];
 const SKIP_LINE = /SPDX-License-Identifier|Copyright \(c\)|^#!/i;

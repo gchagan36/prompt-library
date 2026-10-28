@@ -57,6 +57,22 @@ outside the repo. If you don't run with bypass permissions, allow `Read`, `Write
 and `Edit` on `~/.claude/factory/**` and the `node …/factoryctl.mjs` Bash command,
 or you'll be prompted on every step.
 
+**Sandbox.** In a repo with the Bash sandbox on, builds and tests run in worktrees
+under `~/.claude/factory/`, outside the repo, so the sandbox has to allow writes
+there. Add this to `~/.claude/settings.json` (the sandbox ignores `allowWrite` in a
+repo's own settings):
+
+```json
+{ "sandbox": { "filesystem": { "allowWrite": ["~/.claude/factory"] },
+               "allowUnsandboxedCommands": false } }
+```
+
+`allowWrite` covers only the `factory` folder; the rest of `~/.claude` stays
+read-only. `allowUnsandboxedCommands: false` makes Claude Code ignore an agent's
+request to run a command unsandboxed, so a prompt-injected agent can't escape
+the sandbox. Subagents use their parent session's sandbox. Every `/factory`
+command checks it can write here before it starts.
+
 ## Use
 
 ```

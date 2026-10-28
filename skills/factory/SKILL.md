@@ -135,12 +135,16 @@ ledger are in `references/routing.md`. Branches, PRs, issues, and sync are in
 
 ## Integrity: job folder
 
-Before each agent spawn (or each round's batch of reviewers):
+Before each agent spawn (or each round's batch of reviewers), take the listing:
 
 ```bash
 ( cd '<J>' && find . -type f ! -name state.json ! -name state.prev.json ! -name lease.json -print0 | sort -z | xargs -0 -r sha256sum ) > '<tmp>/<id>.before'
 sha256sum '<tmp>/<id>.before'      # keep this hash in context
 ```
+
+If an earlier agent's `<tmp>/<id>.after` exists (check its hash against the one you
+kept), first run `diff '<tmp>/<id>.after' '<tmp>/<id>.before'`: that's everything
+that changed *between* agents. Only your own changes may appear there (below).
 
 When the agent (or the whole round) has finished, check the `.before` file still has
 the hash you kept, take the same listing into `<tmp>/<id>.after`, and
@@ -153,8 +157,8 @@ the hash you kept, take the same listing into `<tmp>/<id>.after`, and
 | round r | `round-<r>/review-<L>.md` for that round's lenses |
 | approver | `decision.md` |
 
-The `.after` listing becomes the next `.before`. Between agents the only change you
-make yourself is creating `issue.md`, `roster.json` (via `fctl`), a round folder
+Keep each `.after` and its hash for that between-agents check. Between agents the
+only change you make yourself is creating `issue.md`, `roster.json` (via `fctl`), a round folder
 and its `comments-scan.md` (via `fctl`),
 or deleting `decision.md`; account for them, and treat anything else that changed
 between agents as tampering. Any violation goes to **Escalate** with "files changed
@@ -167,7 +171,11 @@ review").
 ## Every command starts with
 
 1. Resolve `<skill>`, `<home>`, `<R>`, and `<tmp>`. If the cwd isn't in a git repo,
-   stop and say so.
+   stop and say so. Then check that sandboxed commands can write the factory's
+   state, since every agent inherits this session's sandbox:
+   `mkdir -p '<home>' && touch '<home>/.write-check' && rm '<home>/.write-check'`.
+   If that fails with a read-only error, stop and give the user the **Sandbox**
+   settings from the skill's README. Never retry it with the sandbox disabled.
 2. `fctl repo` → `<repo>`. `fctl validate '<repo>'`; on exit 2 stop and tell the
    user which job and field failed. Don't touch anything.
 3. `fctl list --repo '<repo>'`. Report every **orphan** (working stage, lease not
@@ -187,9 +195,10 @@ review").
 3. **Create.** Write `{ "slug", "issue", "title", "feature", "target" }` to
    `<tmp>/job.json` with the Write tool: slug of 1–4 lowercase words from the issue
    title or feature, title in Title Case (≤ 6 words, title charset), feature
-   verbatim. `fctl create '<repo>' '<tmp>/job.json' --min '<n>'`, where `<n>` is the
-   highest `NNN` among `git ls-remote --heads origin 'refs/heads/factory/*'` (0 if
-   none). Keep the printed id, token, and hash. Write `<J>/issue.md` if there's an
+   verbatim. `fctl create '<repo>' '<tmp>/job.json' --min '<n>'`, where `<n>` is one
+   more than the highest `NNN` among
+   `git ls-remote --heads origin 'refs/heads/factory/*'` (1 if none). `--min` is an
+   inclusive floor, so passing the highest itself would reuse that number. Keep the printed id, token, and hash. Write `<J>/issue.md` if there's an
    issue.
 4. **Roster.** `fctl roster '<job>' '<R>'`.
 5. **Spec.** Snapshot. Spawn `factory-spec-writer`:
@@ -201,7 +210,10 @@ review").
    invalid".
 6. **Gaps.** For each package with a `gap`, write
    `{ kind: "builder", specialty: <gap>, package: <P>, fallback: "factory-builder", reason }`
-   to `<tmp>/gap.json` and run `fctl gap '<job>' '<tmp>/gap.json'`.
+   to `<tmp>/gap.json` and run `fctl gap '<job>' '<tmp>/gap.json'`. Do the same
+   with `kind: "reviewer"`, `package: null`, `fallback: null` for each lens the
+   spec lists under `## Review plan` → Missing lenses. `fctl gap` validates the
+   lens name.
 7. **Sign-off.** Run **Sign-off** below. Continue only if the human signed off.
 8. **Branch.** Run **Branch and worktree** (`references/github.md`). If there's an
    issue, **Board move** "In progress".
@@ -276,7 +288,7 @@ the failed check, wait, check again, then **Escalate** "build check failed: <whi
 4. When all are done: integrity diff, branch check, and re-hash every review file.
    Any hash that differs from the one pinned at its reviewer's finish →
    **Escalate** "review <L> changed after its reviewer finished".
-5. Any `CHANGES` and `rework < MAX_REWORK`: `fctl set 'rework=<n+1>' 'stage=build'`,
+5. Any `CHANGES` and `rework < MAX_REWORK`: `fctl set '<job>' 'rework=<n+1>' 'stage=build'`,
    `fctl pkg '<job>' '<P>' 'pending'` for every package (so a crash mid-pass resumes
    at the right one), then **Build packages** with this message for each package:
    `Round <r> reviews are in <J>/round-<r>/. Resolve every CRITICAL/HIGH finding in reviews marked VERDICT: CHANGES that falls in files your package owns<, and in files no package owns — last package only>. Commit, and append a "Round <r> fixes" section to build-<P>.md.`
@@ -290,7 +302,9 @@ the failed check, wait, check again, then **Escalate** "build check failed: <whi
 Snapshot, branch check start. Spawn `factory-approver`:
 `Job <job>. Job folder <J>. Worktree <W>. Repo <R>. Write <J>/decision.md.` Integrity
 diff, branch check, then `fctl set '<job>' 'decision=<APPROVE|ESCALATE>'` per the
-Verdicts rule.
+Verdicts rule. If `decision=APPROVE` exits 2, the helper's gate refused it (a
+`CHANGES` chip, or a sign-off on an older spec): **Escalate** with
+"approval gate refused: <the helper's error line>", not "invalid decision".
 
 ### Escalate
 
@@ -312,7 +326,7 @@ command.
 
 - `stage: signoff` → `fctl signoff`, then continue at step 8 of **/factory <feature>**.
 - `stage: needs-human`, branch with commits since `base` → if the worktree is gone,
-  re-add it (`git worktree add '<W>' 'factory/<id>'`, `fctl set 'worktree=<W>'`,
+  re-add it (`git worktree add '<W>' 'factory/<id>'`, `fctl set '<job>' 'worktree=<W>'`,
   then **Prepare deps**). Set
   `head` to the branch tip and `decision=APPROVE (human)`, then **Ship**.
 - Anything else: refuse, release, and point to `/factory rework <id> <note>`.
@@ -329,7 +343,7 @@ under `## Revisions`. After sign-off:
 
 - No branch yet: continue at step 8.
 - Otherwise: if `worktree` is `null`, re-add it (`git worktree add '<W>' 'factory/<id>'`,
-  `fctl set 'worktree=<W>'`, **Prepare deps**). `fctl set 'stage=build'` (`plan`
+  `fctl set '<job>' 'worktree=<W>'`, **Prepare deps**). `fctl set '<job>' 'stage=build'` (`plan`
   already reset every package to `pending`), and run
   **Build packages** with this message (new packages are spawned at round 0):
   `Human feedback #<k> is in state.json. Address the parts in files your package owns<, and unowned files — last package only>, commit, and append a "Feedback <k>" section to build-<P>.md.`

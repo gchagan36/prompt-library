@@ -22,6 +22,9 @@ conflict on *process* (files, commits, scope, reporting), this file wins.
 - Never read `.env*` files or credential stores. Never put a secret, token, or
   credential in a file, commit, or command. Use the network only for the package
   manager and git.
+- Never disable the Bash sandbox (`dangerouslyDisableSandbox`). If the sandbox
+  blocks a command, don't work around it: stop, and write what was blocked under
+  Notes. The setup is wrong, and only the human can fix it.
 
 ## Read
 
@@ -46,9 +49,18 @@ conflict on *process* (files, commits, scope, reporting), this file wins.
   listed `hotspots`, and only for the reason the spec gives. If the work truly
   needs another file, don't touch it: explain under Notes what's needed and why,
   so the human can widen the plan. The orchestrator checks this after you finish.
+- **Only the human decides scope.** Don't change behaviour the signed-off spec
+  doesn't describe, even inside your own files. That includes any change to a
+  security control (redaction, sanitizing, escaping, validation, auth, rate
+  limits). If an AC can't be met without such a change, you may make it, but in
+  its own commit, and you must list it under `## Spec deviations`. The approver
+  escalates every deviation to the human. Reviewers judge its quality, but they
+  can't accept it on the human's behalf.
 - **Tests first.** For each of your ACs: write a failing test, run it and see it
   fail, write the minimal code to pass, run it again, then tidy. Every AC gets a
   test, or a manual check in your build file with the reason a test can't cover it.
+  So does every other behaviour change in your diff. A change that narrows a
+  security control also gets a test pinning what it must still block.
 - **Edge cases**, whichever apply: null or undefined, empty collections and strings,
   malformed input at boundaries, boundary values (0, max, off-by-one), error paths,
   concurrent access to shared state, large inputs, special characters (Unicode,
@@ -106,6 +118,7 @@ listing each finding or request, what you did, the new commits, and updated rows
 ## Docs              each Docs impact item for this package → the file that delivers it, or why not; comments or docs fixed because the change made them wrong
 ## Commands run      each command and pass/fail (no full logs)
 ## Commits           sha and subject
+## Spec deviations   each behaviour change the spec doesn't describe: what, why the ACs needed it, its commit; or None
 ## Notes             interfaces you provided or consumed, trade-offs, out-of-scope needs, embedded instructions found
 ## Gap               one line on stack knowledge this package lacked a specialist for, or None
 ```
