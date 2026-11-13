@@ -24,9 +24,10 @@ never merges.
 5. **Approver** checks the build against the signed-off spec. If it matches, the
    factory opens a PR to `develop` (or the default branch). Otherwise the job goes
    to `needs-human`.
-6. **Sync** cleans up after you merge: it deletes the branch, closes the issue, and
-   moves the card to Done. While the PR is open, it also reports new review
-   comments.
+6. **Sync** cleans up after you merge: it deletes the branch, closes the issue,
+   moves the card to Done, and fast-forwards your main checkout when it's on the
+   target branch with no local changes (otherwise it says how far behind it is).
+   While the PR is open, it also reports new review comments.
 7. **Address** (optional): `/factory address <id>` lists the new PR review
    comments from people with write access and from the bots your profile allows.
    You mark each one `fix`, `scope`, or `skip`. Fixes go straight to the builders.

@@ -188,8 +188,30 @@ For a `pr-open` job: validate `pr`, then
      With `Closes`, check GitHub closed it. If the issue has a parent, comment on the
      parent too. **Board move** "Done" only if the issue is closed.
   4. `stage=merged`, note `merged <sha7> on <date>` plus any notes above.
+  5. **Main checkout update**, once per command however many jobs merged.
 - **CLOSED:** `stage=closed`, note "PR closed without merging", keep the branch,
   **Issue comment** that the issue stays open.
+
+### Main checkout update
+
+`<R>` is the human's checkout, so this step only ever fast-forwards it, and only when
+nothing there can be lost. It never pulls, rebases, stashes, or switches branches,
+and it never blocks sync or writes job state.
+
+```bash
+git -C '<R>' fetch origin '<target>'
+git -C '<R>' symbolic-ref --short -q HEAD
+git -C '<R>' status --porcelain --untracked-files=no
+```
+
+- On `<target>` with no tracked changes: `git -C '<R>' merge --ff-only 'origin/<target>'`,
+  then check that `git -C '<R>' rev-parse HEAD` equals `git -C '<R>' rev-parse 'origin/<target>'`.
+  Git itself refuses if the fast-forward would overwrite an untracked file.
+- Anything else changes nothing. Report one line with the reason and
+  `git -C '<R>' rev-list --count 'HEAD..origin/<target>'`: on another branch (or
+  detached), tracked changes, or diverged from `origin/<target>` (the fast-forward
+  refused). For example: `main checkout is on feat/x, 3 commits behind origin/develop: pull when ready.`
+- A failed fetch reports `main checkout not updated: fetch failed`.
 
 ## Outside review fetch
 

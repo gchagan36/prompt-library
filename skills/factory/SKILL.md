@@ -319,8 +319,9 @@ Release the lease.
 Job id and stage; packages with their builders; every round's chips; the PR URL or
 the escalation note; gaps logged this job, and the specialty's running total from
 `fctl gaps` when it's 2 or more ("3rd job to need react-ui: consider
-`/factory gaps`"); for resting stages the exact next commands; the dashboard
-command.
+`/factory gaps`"); for resting stages the exact next commands; after a sync that
+merged a job, whether the main checkout was fast-forwarded or why not; the
+dashboard command.
 
 ## /factory approve <id>
 
