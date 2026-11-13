@@ -41,6 +41,7 @@ const RULES = {
     /\bfeedback #?\d+\b/i,
     /\b(?:spec|build-P\d)\.md\b/,
     /\bfactory job\b/i,
+    /\boutside review\b/i,
     /\bper (?:our |the )?(?:discussion|meeting|call|conversation|slack)\b/i,
     /\bas (?:discussed|agreed)\b/i
   ],

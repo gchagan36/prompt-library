@@ -7,6 +7,7 @@ import {
 import {
   cmdComments, cmdGap, cmdGaps, cmdLenses, cmdOwnership, cmdPlan, cmdRoster, cmdScan
 } from "./cmd-routing.mjs";
+import { cmdOutside, cmdOutsideCount, cmdPick, cmdReplies } from "./cmd-outside.mjs";
 import {
   cmdChip, cmdFeedback, cmdLens, cmdNote, cmdPkg, cmdRound, cmdSet, cmdSignoff, cmdSignoffCheck
 } from "./cmd-state.mjs";
@@ -37,7 +38,11 @@ const COMMANDS = Object.freeze({
   roster: cmdRoster,
   ownership: cmdOwnership,
   lenses: cmdLenses,
-  comments: cmdComments
+  comments: cmdComments,
+  outside: cmdOutside,
+  "outside-count": cmdOutsideCount,
+  pick: cmdPick,
+  replies: cmdReplies
 });
 
 export const USAGE = `usage: factoryctl <command> ...   (see skills/factory/references/state.md)
@@ -48,6 +53,8 @@ export const USAGE = `usage: factoryctl <command> ...   (see skills/factory/refe
   roster <job> <repo-path> | plan <job> | pkg <job> <P> <status> | lens <job> <lens>
   round <job> | chip <job> <lens> <file> | lenses <job> | ownership <job> <P> <from> <to> [--unowned]
   comments <job> <round>
+  outside <job> <threads> <reviews> <comments> <trusted> | outside-count <job> <same four files>
+  pick <job> <file> | replies <job>
   feedback <job> <file> | signoff <job> | signoff-check <job>
   restore <job> <hash> --lease <token> | gap <job> <file> | gaps | scan <file>...
 exit: 0 ok, 1 check failed, 2 invalid, 3 tampered, 4 backup tampered, 5 not found, 6 lease`;

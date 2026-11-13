@@ -122,14 +122,15 @@ export function orchestrator(f) {
   };
 
   // Build packages. work[P](o) commits in <W> and writes build-<P>.md; it may return a
-  // second callback, the builder's reply to an ownership message.
-  o.buildPass = ({ work, unownedLast = false }) => {
+  // second callback, the builder's reply to an ownership message. `ownFiles` lists files the
+  // orchestrator itself created since the last agent (e.g. outside-<k>.md).
+  o.buildPass = ({ work, unownedLast = false, ownFiles = [] }) => {
     const pkgs = o.state().packages;
     const results = {};
     pkgs.forEach((pkg, i) => {
       o.must(["pkg", o.job, pkg.id, "building"]);
       const from = o.state().head;
-      assert.deepEqual(o.snapshot(), [], "nothing changed between agents");
+      assert.deepEqual(o.snapshot(i === 0 ? ownFiles : []), [], "nothing changed between agents");
       const reply = work[pkg.id](o);
       assert.deepEqual(o.integrity([`build-${pkg.id}.md`]), []);
       assert.ok(existsSync(path.join(o.J, `build-${pkg.id}.md`)), "build check: build file");

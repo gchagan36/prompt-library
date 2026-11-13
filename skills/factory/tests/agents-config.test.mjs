@@ -114,7 +114,22 @@ test("docs: the lens exists, comment rules reach builders, and docs impact flows
   assert.match(agents.find((a) => a.fm.name === "factory-spec-writer").text, /^## Docs impact /m);
   const approver = agents.find((a) => a.fm.name === "factory-approver").text;
   assert.match(approver, /Docs delivered/);
-  assert.match(approver, /checks 1–9/);
+  assert.match(approver, /checks 1–10/);
+});
+
+test("outside review: picked items are requirements for every agent, and the approver checks delivery", () => {
+  const picked = /marks\s+(it\s+)?`fix`\s+or\s+`scope`/;
+  for (const file of ["builder-contract.md", "review-contract.md"]) {
+    assert.match(read(path.join(SKILL_DIR, "references", file)), picked, file);
+  }
+  for (const name of ["factory-spec-writer", "factory-approver"]) {
+    assert.match(agents.find((a) => a.fm.name === name).text, picked, name);
+  }
+  assert.match(agents.find((a) => a.fm.name === "factory-approver").text, /Outside review delivered/);
+  const skill = read(path.join(SKILL_DIR, "SKILL.md"));
+  assert.match(skill, /^## \/factory address <id>$/m);
+  assert.match(skill, /fctl pick '<job>' '<tmp>\/pick\.json'/);
+  assert.doesNotMatch(read(path.join(SKILL_DIR, "references/github.md")), /resolveReviewThread/, "the factory never resolves threads");
 });
 
 test("every factory file stays under 800 lines", () => {

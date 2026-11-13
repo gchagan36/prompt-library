@@ -24,6 +24,7 @@ $FACTORY_HOME/
       round-<r>/review-<lens>.md      one reviewer per file
       round-<r>/comments-scan.md      mechanical comment scan for the docs lens (factoryctl comments)
       decision.md                     factory-approver
+      outside-<k>.md                  outside PR review pass k, for triage (factoryctl outside)
     worktrees/<id>/                   the job's git worktree (never served by the dashboard)
 ```
 
@@ -64,6 +65,7 @@ $FACTORY_HOME/
   "feedback": [],
   "decision": null,
   "pr": null,
+  "outside": [],
   "note": "round 1: waiting on ux",
   "created": "2026-10-27T18:00:00Z",
   "updated": "2026-10-27T18:04:00Z"
@@ -91,10 +93,11 @@ $FACTORY_HOME/
 | `feedback` | Array of prose strings (≤ 4000 chars each), oldest first. |
 | `decision` | `null`, `APPROVE`, `ESCALATE`, or `APPROVE (human)`. |
 | `pr` | `null` or `^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pull/[0-9]+$`. |
+| `outside` | Optional: jobs created before it existed lack it, and that reads as `[]`. Outside review passes, oldest first, at most 20, and non-empty only with a `pr`. Each pass is `{ items, picks, shipped }`. `items` holds 1–30 `{ id, reply, url }`. `id` is `t:<n>` (review-thread comment), `r:<n>` (review body), or `c:<n>` (PR comment), and ids are unique across passes. `reply` is the thread's first comment id for `t:`, else `null`. `url` must equal `<pr>#discussion_r<n>`, `#pullrequestreview-<n>`, or `#issuecomment-<n>`. `picks` is `null` (latest pass only) or one of `fix`, `scope`, or `skip` per item. `shipped` is `null` or the `head` sha the pass shipped at. |
 | `note` | `^[A-Za-z0-9 ,.:;()#/_+=-]{1,160}$`. No `@`: notes are posted to GitHub, where it would ping people. |
 | `created`, `updated` | UTC `YYYY-MM-DDTHH:MM:SSZ`. Set by the helper. |
 
-Unknown keys are invalid. Key lookups use `Object.hasOwn` so `constructor=…` and
+Unknown keys are invalid; `outside` is the only key a job may lack. Key lookups use `Object.hasOwn` so `constructor=…` and
 similar inherited names are rejected.
 
 ## Leases: one session owns a working job
@@ -169,6 +172,10 @@ arguments). Output is plain text, one value per line, unless noted.
 | `plan '<job>'` | Parses the spec's plan block (see **Plan block**), validates it, checks every `agent` is a builder in `roster.json` and every lens a reviewer in it, then sets `packages` (all `pending`) and `lenses` (unioned with the current lenses once any round exists). Only in stage `spec` or `signoff`. Exit 2 names the first bad field. | `hash` |
 | `ownership '<job>' '<P>' '<from-sha>' '<to-sha>' ['--unowned']` | Runs `git diff --name-only <from>..<to>` in the job's worktree (`--no-renames`) and prints each changed file that package `<P>` neither owns nor lists as a hotspot. With `--unowned`, files no package owns are allowed too (never another package's). Exit 1 if any. Re-parses the plan from `spec.md` and requires a valid sign-off (exit 2 if none, 3 if `spec.md` changed since). | files |
 | `comments '<job>' '<r>'` | Scans the comment and doc lines added in `base..head` (`git diff -U0`) and writes `round-<r>/comments-scan.md`: a table of candidates by rule: `tracker` (issue, PR, and ticket refs, tracker and chat URLs), `process` (AC numbers, review rounds, the spec, "as discussed"), `history` ("previously", "now uses"), `todo` (fewer than 4 words of explanation), `commented-code`. Docs files get `tracker` and `process` only, and changelogs `process` only. Knows `//`, `/* */`, `#`, `--`, `<!-- -->`, and Python docstrings, but misses a block opened in unchanged context. Candidates are evidence, not findings. Needs the round folder (exit 5). | candidate count |
+| `outside '<job>' '<threads>' '<reviews>' '<comments>' '<trusted>'` | Only at `pr-open`. Reads the files written by **Outside review fetch** (`github.md`). Lists each comment that's new (not in an earlier pass), from a trusted author, not the factory's own `Factory job …` post, and not in a resolved thread. Records them as pass `k`, oldest first, capped at 30, with `picks: null`, and writes `outside-<k>.md`: every body fenced as untrusted text. An unpicked latest pass is replaced, and dropped (with its file) when nothing is new. | `pass <k>` (0 if none), `items <n>`, `untrusted <n>`, `more <n>`, `partial yes\|no`, then `hash` |
+| `outside-count '<job>'` + the same four files | Read-only. Counts what `outside` would list, without the cap. | `items <n>`, `untrusted <n>` |
+| `pick '<job>' '<file>'` | Only at `pr-open`, on an unpicked latest pass. The file is `{ "fix": [n], "scope": [n], "skip": [n] }` and must name every item number 1..n exactly once. | `hash` |
+| `replies '<job>'` | For the latest picked pass that isn't shipped yet: prints `reply <comment id>` per thread (deduplicated) and `link <url>` per review or PR comment, for every item not picked `skip`, then sets `shipped` to `head`. Otherwise it changes nothing and prints nothing. | lines, then `hash` |
 | `lenses '<job>'` | Computes the lenses the diff `base..head` requires (see **Diff triggers**), adds any missing ones that have a reviewer in `roster.json`, and prints `added <lens>` / `missing <lens>` lines (missing = triggered but no reviewer: a reviewer gap). Never removes a lens. | lines, then `hash` |
 
 ### Roster
@@ -238,11 +245,12 @@ top-level files only.
 - Custom reviewers: any changed file matching one of their `Triggers:` globs.
 
 **Auth.** Commands that change `state.json` or `lease.json` (`release`, `set`, `note`,
-`plan`, `pkg`, `lens`, `lenses`, `round`, `chip`, `feedback`, `signoff`) end with
+`plan`, `pkg`, `lens`, `lenses`, `round`, `chip`, `feedback`, `signoff`, `outside`,
+`pick`, `replies`) end with
 `--lease '<token>' --expect '<hash>'`. `restore` takes `--lease` only. `create` and
 `claim` issue the token. Read-only and side-file commands (`repo`, `hash`, `show`,
-`validate`, `list`, `roster`, `gap`, `gaps`, `ownership`, `signoff-check`, `scan`)
-take neither. `roster.json` and `gaps.jsonl` aren't hash-protected by the helper:
+`validate`, `list`, `roster`, `gap`, `gaps`, `ownership`, `signoff-check`, `scan`,
+`outside-count`) take neither. `roster.json` and `gaps.jsonl` aren't hash-protected by the helper:
 `roster.json` sits in the job folder, so the orchestrator's job-folder snapshot
 covers it, and the ledger is advisory.
 
